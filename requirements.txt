@@ -1,0 +1,13 @@
+Flask==0.10.1
+Flask-SQLAlchemy==2.0
+Jinja2==2.7.3
+SQLAlchemy==0.9.9
+Werkzeug==0.10.4
+uwsgi==2.0.12
+numpy==1.10.4
+scikit-learn==0.17
+networkx==1.11
+simplejson==3.8.1
+blinker=1.4
+py-crypto-params=1.0.0 #will install pycrypto and six
+
