@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ error_title }}</title>
+</head>
+<body>
+<h1>{{ error_title }}</h1>
+A teraz usiądź wygodnie mały kurwiu i popatrz dlaczego <strong>{{ status_code }}</strong><br/><br/>
+<blockquote>{{ more_info }}</blockquote>
+<br/>
+<input type="button" value="Try AGAIN" onclick="javascript:window.location='{{ url_for('login') }}'"/>
+</body>
+</html>
