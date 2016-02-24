@@ -30,8 +30,7 @@ def refresh():
     content, status_code = spotify_helper.refresh_token(user.spotify_refresh_token)
     if status_code == 200:
         # save new access token
-        # todo: check and and parse content returned during refresh token -> set user record correctly
         user.spotify_access_token = content.access_token
-        user.spotify_token_expiration = content.access_token_expiration
+        user.spotify_token_expiration = content.expires_in
         user_helper.save_user(user)
     return content, status_code
