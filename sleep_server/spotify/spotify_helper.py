@@ -35,6 +35,27 @@ def get_current_user(user):
     return Spotify(auth=user.spotify_access_token).me()
 
 
+@spotifyapihandler
+def get_playlist_for_user(user, spotify_id, playlist_id):
+    return Spotify(auth=user.spotify_access_token).user_playlist(spotify_id, playlist_id=playlist_id,
+                                                                 fields='items(added_by.id,track(uri,duration_ms))')
+
+
+@spotifyapihandler
+def get_or_create_playlist_by_name(user, playlist_name):
+    sp_api = Spotify(auth=user.spotify_access_token)
+    existing_playlists = sp_api.user_playlists(user.spotify_id, limit=1000)
+    sleep_playlists = [pl for pl in existing_playlists if pl['name'] == playlist_name and not pl['public']]
+    if len(sleep_playlists) > 0:
+        return sleep_playlists[0]
+    return sp_api.user_playlist_create(user.spotify_id, playlist_name, public=False)
+
+
+@spotifyapihandler
+def set_playlist_content(user, playlist_id, tracks):
+    Spotify(auth=user.spotify_access_token).user_playlist_replace_tracks(user.spotify_id, playlist_id, tracks)
+
+
 def token_for_code(auth_code, redirect_uri):
     headers = {'Authorization': app.config['AUTH_HEADER']}
     form = {'grant_type': 'authorization_code',
