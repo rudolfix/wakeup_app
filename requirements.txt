@@ -10,4 +10,4 @@ networkx==1.11
 simplejson==3.8.1
 blinker=1.4
 py-crypto-params=1.0.0 #will install pycrypto and six
-
+spotipy==2.3.7
