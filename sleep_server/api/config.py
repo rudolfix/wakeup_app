@@ -8,6 +8,7 @@ class Config(object):
     CLIENT_CALLBACK_URL = 'wakeupapp://'
     AUTH_HEADER = 'Basic ' + str(base64.standard_b64encode((CLIENT_ID + ':' + CLIENT_SECRET).encode('ascii')), 'ascii')
     SPOTIFY_ACCOUNTS_ENDPOINT = 'https://accounts.spotify.com'
-    ADMIN_SPOTIFY_LOGIN_SCOPE ='playlist-read-private playlist-read-collaborative playlist-modify-private user-follow-read user-library-read'
+    ADMIN_SPOTIFY_LOGIN_SCOPE ='playlist-read-private playlist-read-collaborative playlist-modify-private user-follow-read user-library-read user-read-private'
     ADMIN_AUTH_COOKIE = 'spotify-auth'
     HOST_NAME = 'dev.wakeupapp.com'
+    USER_STORAGE_URI = '/home/vagrant/user_storage/'
