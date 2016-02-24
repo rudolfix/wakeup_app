@@ -15,8 +15,8 @@ class User:
         self.spotify_id = sp_id
         self.spotify_access_token = None
         self.spotify_refresh_token = None
-        self.user_id = uuid.uuid4().hex #always generate
-        self.playlists = None
+        self.user_id = uuid.uuid4().hex # always generate
+        self.playlists = []
         self._spotify_token_expiration = None
         self.created_at = datetime.now(timezone.utc)
         self.updated_at = None
@@ -49,7 +49,7 @@ class User:
     @staticmethod
     def deserialize(file):
         user = pickle.load(file)
-        if(user._version != User.version):
+        if user._version != User.version:
             raise UserRecordVersionMismatch(user._version, User.version)
         user.is_new = False
         return user
@@ -57,8 +57,10 @@ class User:
     @staticmethod
     def decrypt_user_secret(secret):
         cp = cryptoparams.CryptoParams(app.config['ENCRYPTION_KEY'], app.config['ENCRYPTION_IV'])
-        # todo: encapsulate encryption exception raise user_helper.UserCannotDescryptSecret()
-        return cp.decrypt(secret)
+        try:
+            return cp.decrypt(secret)
+        except ValueError:
+            raise UserCannotDescryptSecret()
 
     @staticmethod
     def encrypt_user_secret(secret):
