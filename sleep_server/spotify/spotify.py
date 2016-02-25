@@ -1,5 +1,5 @@
 from api import app
-from flask import request, json
+from flask import request, json, redirect, url_for
 from spotify import spotify_helper
 from api import user_helper
 from api.user import User
@@ -8,7 +8,10 @@ from api.user import User
 @app.route('/swap', methods=['POST', 'GET'])
 def swap():
     auth_code = request.args.get('code')
-    token_data, status_code = spotify_helper.token_for_code(auth_code, app.config['CLIENT_CALLBACK_URL'])
+    if app.config['TESTING']:
+        token_data, status_code = spotify_helper.fake_token_for_code(auth_code, app.config['CLIENT_CALLBACK_URL'])
+    else:
+        token_data, status_code = spotify_helper.token_for_code(auth_code, app.config['CLIENT_CALLBACK_URL'])
     if status_code == 200:
         user = user_helper.create_user(token_data)
         # refresh token will contain encrypted spotify id
@@ -21,16 +24,17 @@ def swap():
 @app.route('/refresh', methods=['POST', 'GET'])
 def refresh():
     # descrypt refresh token, it will contain spotify_id (currently)
-    spotify_id = User.decrypt_user_secret(request.args.get['refresh_token'])
+    encrypted_rf = request.args.get('refresh_token')
+    spotify_id = User.decrypt_user_secret(encrypted_rf)
     # user must exist
     user = user_helper.load_user(spotify_id)
     if user.is_new:
         raise user_helper.UserDoesNotExist(request.args.get['refresh_token'])
     # follow user procedure in SWAP
-    content, status_code = spotify_helper.refresh_token(user.spotify_refresh_token)
+    token_data, status_code = spotify_helper.refresh_token(user.spotify_refresh_token)
     if status_code == 200:
         # save new access token
-        user.spotify_access_token = content.access_token
-        user.spotify_token_expiration = content.expires_in
+        user.spotify_access_token = token_data['access_token']
+        user.spotify_token_expiration = token_data['expires_in']
         user_helper.save_user(user)
-    return content, status_code
+    return json.jsonify(token_data), status_code
