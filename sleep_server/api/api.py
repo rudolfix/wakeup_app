@@ -32,6 +32,8 @@ def get_playlists(user):
 @check_user
 def set_playlist(user, playlist_type):
     # read playlist length from get params
+    if request.args.get('desired_length') is None:
+        raise PlaylistIncorrectDesiredLength(-1, int(app.config['MAXIMUM_PLAYLIST_LENGTH']))
     desired_length = int(request.args.get('desired_length'))
     # check max and min playlist length. may be 0
     if desired_length < 0 or desired_length > int(app.config['MAXIMUM_PLAYLIST_LENGTH']):
@@ -73,7 +75,7 @@ def set_playlist(user, playlist_type):
     user.playlists.append(user_pl_meta)
     user_helper.save_user(user)
 
-    return json.jsonify(user_pl_meta)
+    return json.jsonify(result=user_pl_meta)
 
 
 @app.errorhandler(ApiException)
@@ -87,7 +89,7 @@ def handle_api_error(e):
 
 
 def make_error_dict(e):
-    return { 'code': e.__class__.__name__, 'msg': str(e) }
+    return {'error': { 'status': e.status_code, 'code': e.__class__.__name__, 'message': str(e) }}
 
 # todo: handle API exceptions properly
 # check the authorization token, if user not exists return 401 Access Denied -> must re-login
