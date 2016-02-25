@@ -1,0 +1,2 @@
+export WAKEUPP_APP_CONFIG_FILE=config.production.py
+uwsgi --http :80 --wsgi-file /home/ubuntu/wakeupapp/sleep_server/run.py --callable app --py-autoreload=1 --pythonpath /home/ubuntu/wakeupapp/sleep_server/
