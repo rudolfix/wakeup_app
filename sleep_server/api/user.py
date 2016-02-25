@@ -1,9 +1,9 @@
 import uuid
 import pickle
-from api.api import ApiException
+from api import app
+from api.exceptions import *
 from datetime import datetime, timezone, timedelta
 import cryptoparams
-from api import app
 
 
 class User:
@@ -20,6 +20,7 @@ class User:
         self._spotify_token_expiration = None
         self.created_at = datetime.now(timezone.utc)
         self.updated_at = None
+        self.is_playlists_ready = False
 
     # @classmethod
     # def from_sp__token_data(self, sp_id, sp_token, sp_encrypted_refresh_token, ap_token_expiration_seconds):
@@ -34,7 +35,7 @@ class User:
         self._spotify_token_expiration = (now + timedelta(seconds=value_seconds))
 
     @property
-    def access_cookie(self):
+    def authorization_string(self):
         return User.encrypt_user_secret(self.spotify_id) + ' ' + self.spotify_access_token
 
     #@staticmethod
@@ -67,13 +68,3 @@ class User:
         cp = cryptoparams.CryptoParams(app.config['ENCRYPTION_KEY'], app.config['ENCRYPTION_IV'])
         return cp.encrypt(secret)
 
-
-class UserRecordVersionMismatch(ApiException):
-    def __init__(self, found_ver, current_ver):
-        super(ApiException, self).__init__('Found user record ver %i but current ver is %i and no upgrade path specified'
-                                           % (found_ver, current_ver))
-
-
-class UserCannotDescryptSecret(ApiException):
-    def __init__(self):
-        super(ApiException, self).__init__('User secret could not be descrypted')
