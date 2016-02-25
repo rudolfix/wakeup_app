@@ -11,7 +11,7 @@ class Config(object):
     SPOTIFY_ACCOUNTS_ENDPOINT = 'https://accounts.spotify.com'
     SPOTIFY_LOGIN_SCOPE = 'playlist-read-private playlist-read-collaborative playlist-modify-private user-follow-read user-library-read user-read-private'
     ADMIN_AUTH_COOKIE = 'spotify-auth'
-    HOST_NAME = 'dev.wakeupapp.com:5000'
+    HOST_NAME = 'dev.wakeupapp.com'
     USER_STORAGE_URI = '/home/vagrant/user_storage/'
     TESTING = False
     MOCKUP_MIN_PLAYLIST_GEN_SEC = 15
