@@ -1,11 +1,11 @@
 from api import app
-import os.path
-from api.user import User
+import os.path, shutil
 import pickle
 from datetime import datetime, timezone
-from api.api import ApiException
+from api.user import User
+from api.exceptions import *
 from spotify import spotify_helper
-from api import user_helper
+import random
 
 
 def create_user(token_data):
@@ -27,13 +27,15 @@ def create_user(token_data):
 
 
 def check_user(auth_header):
+    if auth_header is None or len(auth_header) == 0:
+        raise SpotifyApiInvalidToken('invalid_auth_header', 'Authorization header in valid format not provided')
     # get spotify id from user secret
     secret, access_token = auth_header.split(' ')
     spotify_id = User.decrypt_user_secret(secret)
     # user must exist
-    user = user_helper.load_user(spotify_id)
+    user = load_user(spotify_id)
     if user.is_new:
-        raise user_helper.UserDoesNotExist(secret)
+        raise UserDoesNotExist(secret)
     # auth token should match
     if user.spotify_access_token != access_token:
         raise spotify_helper.SpotifyApiInvalidToken('stored_user_token_mismatch',
@@ -60,6 +62,18 @@ def load_user(spotify_id):
         return user
 
 
+def check_user_playlists_generation_status(user):
+    if not user.is_playlists_ready:
+        # mockup playlist wait time max 2 mins, min 15 sec
+        min_gen = app.config['MOCKUP_MIN_PLAYLIST_GEN_SEC']
+        max_gen = app.config['MOCKUP_MAX_PLAYLIST_GEN_SEC']
+        if (datetime.now(timezone.utc) - user.created_at).seconds < random.randrange(min_gen, max_gen):
+            raise PlaylistsDataNotReadyException()
+        else:
+            user.is_playlists_ready = True
+            save_user(user)
+
+
 def save_user(user):
     assert user.spotify_id is not None and len(user.spotify_id) > 0, 'spotify_id must be present before saving user'
     assert user.spotify_access_token is not None and len(user.spotify_access_token) > 0, \
@@ -69,11 +83,12 @@ def save_user(user):
     assert user.spotify_token_expiration is not None, 'spotify_token_expiration must be present before saving user'
 
     path = app.config['USER_STORAGE_URI'] + user.spotify_id
-    with open(path, 'bw+') as f:
+    with open(path, 'bw') as f:
         user.updated_at = datetime.now(timezone.utc)
         User.serialize(user, f)
 
 
-class UserDoesNotExist(ApiException):
-    def __init__(self, user_id):
-        super(ApiException, self).__init__('User with user id %s does not exist' % user_id)
+def init_user_storage():
+    path = app.config['USER_STORAGE_URI']
+    shutil.rmtree(path, ignore_errors=True)
+    os.mkdir(path)
