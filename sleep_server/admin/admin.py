@@ -1,9 +1,7 @@
 from api import app
 from spotify import spotify_helper
 from flask import request, redirect, url_for, make_response, render_template
-import urllib.parse
 from functools import wraps
-from api.user import User
 from api import user_helper
 
 
@@ -18,6 +16,15 @@ def spotify_authorized(f):
     return _wrap
 
 
+def check_user(f):
+    @wraps(f)
+    def _wrap(*args, **kwargs):
+        user = user_helper.check_user(request.cookies.get(app.config['ADMIN_AUTH_COOKIE']))
+        return f(user, *args, **kwargs)
+
+    return _wrap
+
+
 def render_login_error(error_title, status_code, token_data):
     return render_template('admin_login_error.html', error_title=error_title, status_code=status_code,
                            more_info=token_data)
@@ -27,11 +34,7 @@ def render_login_error(error_title, status_code, token_data):
 def login():
     # if auth cookie does not exist redirect to spotify login
     if app.config['ADMIN_AUTH_COOKIE'] not in request.cookies:
-        params = {'client_id': app.config['CLIENT_ID'],
-                  'response_type': 'code',
-                  'redirect_uri': url_for('login_completed', _external=True),
-                  'scope': app.config['ADMIN_SPOTIFY_LOGIN_SCOPE']}
-        url = app.config['SPOTIFY_ACCOUNTS_ENDPOINT'] + '/authorize?' + urllib.parse.urlencode(params)
+        url = spotify_helper.spotify_login(url_for('login_completed', _external=True))
         resp = redirect(url)
     else:
         resp = redirect(url_for('dashboard'))
@@ -49,7 +52,7 @@ def login_completed():
             user = user_helper.create_user(token_data)
             # now you may store cookie
             resp = make_response(redirect(url_for('dashboard')))
-            resp.set_cookie(app.config['ADMIN_AUTH_COOKIE'], user.access_cookie,
+            resp.set_cookie(app.config['ADMIN_AUTH_COOKIE'], user.authorization_string,
                             max_age=int(token_data['expires_in']), path='/admin')
             return resp
         return render_login_error('Code exchange error', 'HTTP ' + str(status_code), token_data)
@@ -59,5 +62,7 @@ def login_completed():
 
 @app.route('/admin/dashboard')
 @spotify_authorized
-def dashboard():
-    return render_template('admin_dashboard.html')
+@check_user
+def dashboard(user):
+    return render_template('admin_dashboard.html', authorization_header=user.authorization_string,
+                           refresh_token=user.spotify_refresh_token, access_token=user.spotify_access_token)

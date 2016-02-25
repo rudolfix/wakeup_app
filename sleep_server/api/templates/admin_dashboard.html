@@ -2,9 +2,14 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Title</title>
+    <title>Admin Dashboard</title>
 </head>
 <body>
-
+    <h1>Logged in user data</h1>
+    <ul>
+        <li>Authorization header: {{ authorization_header }}</li>
+        <li>Spotify Refresh Token: {{ refresh_token }}</li>
+        <li>Access Token: {{ access_token }}</li>
+    </ul>
 </body>
 </html>
