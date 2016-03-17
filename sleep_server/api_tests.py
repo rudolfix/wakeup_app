@@ -61,7 +61,7 @@ def test_spotify_swap(client):
     assert 'refresh_token' in j
     assert 'access_token' in j
 
-    #save spotify id for later use
+    # save spotify id for later use
     sp_record = spotify_helper.get_current_user_by_token(j['access_token'])
     api.app.config["TEST_SPOTIFY_ID"] = sp_record['id']
     user = user_helper.load_user(sp_record['id'])
@@ -89,23 +89,56 @@ def test_create_playlist(client):
     user.is_playlists_ready = True
     user_helper.save_user(user)
     rv = client.get('/me/playlists', headers = headers)
-    assert rv.status_code == 404, 'Playlist data is not set should be returned'
+    assert rv.status_code == 200, 'Default playlist data should be returned'
+    # should have two playlists
+    j = _check_ok_response_body(rv.data)
+    assert len(j['result']) == 2
     #set playlist data
     rv = client.post('/me/playlists/wake_up?desired_length=35')
     assert rv.status_code == 401
+    _check_error_response_body(rv.data)
     rv = client.post('/me/playlists/wake_up?desired_length=' + str(45*60*1000), headers=headers)
     assert rv.status_code == 200
+    _check_ok_response_body(rv.data)
     rv = client.get('/me/playlists', headers = headers)
-    assert rv.status_code == 404, 'Playlist data is not set should be returned'
+    assert rv.status_code == 200, 'Default playlist data should be returned'
+    _check_ok_response_body(rv.data)
     rv = client.post('/me/playlists/fall_asleep?desired_length=' + str(35*60*1000), headers=headers)
     assert rv.status_code == 200
+    _check_ok_response_body(rv.data)
     rv = client.get('/me/playlists', headers = headers)
     assert rv.status_code == 200
+    j = _check_ok_response_body(rv.data)
+    assert len(j['result']) == 2
     #test list overwrite
     rv = client.post('/me/playlists/wake_up?desired_length=' + str(80*60*1000), headers=headers)
     assert rv.status_code == 200
+    _check_ok_response_body(rv.data)
     rv = client.post('/me/playlists/wake_up?desired_length=' + str(8000*60*1000), headers=headers)
     assert rv.status_code == 400
+    _check_error_response_body(rv.data)
     rv = client.get('/me/playlists', headers = headers)
     assert rv.status_code == 200
+    j = _check_ok_response_body(rv.data)
+    assert len(j['result']) == 2
     #check number of playlists
+
+
+def _check_ok_response_body(body):
+    j = json.loads(body)
+    # assert 'result' in j
+    if not 'result' in j:
+        pytest.fail('"result" dictionary key expected in OK response')
+    return j
+
+
+def _check_error_response_body(body):
+    j = json.loads(body)
+    if not 'error' in j:
+        pytest.fail('"error" dictionary key expected in error response')
+    err = j['error']
+    req_elements = ['code', 'message', 'status']
+    for el in req_elements:
+        if not el in err:
+            pytest.fail('"error" must contain element %s' % el)
+    return err
