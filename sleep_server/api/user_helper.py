@@ -1,11 +1,16 @@
 from api import app
 import os.path, shutil
+from functools import reduce
 import pickle
 from datetime import datetime, timezone
 from api.user import User
 from api.exceptions import *
 from spotify import spotify_helper
 import random
+import math
+
+
+possible_list_types = ['wake_up', 'fall_asleep']
 
 
 def create_user(token_data):
@@ -60,6 +65,49 @@ def load_user(spotify_id):
     else:
         user = User(spotify_id) # return empty record
         return user
+
+
+def create_user_playlist(user, playlist_type, desired_length):
+    # create or update spotify playlist form list of playlists on Sarnecka's Spotify account
+    source_playlist = spotify_helper.get_playlist_tracks_for_user(user, '1130122659',
+                                                           '1v1Do2ukgKZ64wCuOrBnug' if playlist_type == 'wake_up' else
+                                                           '4rk4vb5hjM2jC5HFaOKRAL')
+    source_playlist = source_playlist['items']
+    # desired length in milliseconds
+    if desired_length == 0:
+        source_playlist = []
+        actual_length = 0
+    else:
+        # remove randomly until list fits the desired time
+        pl_len = lambda pl: reduce(lambda x, y: x + y['track']['duration_ms'], pl, 0)
+        actual_length = pl_len(source_playlist)
+        while len(source_playlist) > 2:  # first and last songs are always here
+            rem_idx = random.randrange(1, len(source_playlist) - 1)
+            rem_item = source_playlist[rem_idx]
+            if math.fabs(actual_length-rem_item['track']['duration_ms']-desired_length) > \
+                    math.fabs(actual_length-desired_length):
+                break
+            source_playlist.remove(rem_item)
+            actual_length = pl_len(source_playlist)
+    # create/update spotify playlist
+    sp_user_pl = spotify_helper.get_or_create_playlist_by_name(user,
+                                                               '*Sleep App - Wake Up*' if playlist_type == 'wake_up' else
+                                                               '*Sleep App - Fall Asleep*')
+    spotify_helper.set_playlist_content(user, sp_user_pl['id'], [item['track']['uri'] for item in source_playlist])
+    # save user records
+    user_pl_meta = {'type': playlist_type, 'uri': sp_user_pl['uri'], 'length': actual_length}
+    existing_user_pl_meta = [pl for pl in user.playlists if pl['type'] == playlist_type]
+    if len(existing_user_pl_meta) == 1:
+        user.playlists.remove(existing_user_pl_meta[0])
+    user.playlists.append(user_pl_meta)
+    return user_pl_meta
+
+
+def gather_music_data(user):
+    # currently just create default playlists
+    for playlist_type in possible_list_types:
+        create_user_playlist(user, playlist_type, 30 * 60 * 1000)
+    save_user(user)
 
 
 def check_user_playlists_generation_status(user):
