@@ -45,8 +45,8 @@ def login():
 @app.route('/admin/login_completed')
 def login_completed():
     # check status
-    if 'error' not in request.args:
-        token_data, status_code = spotify_helper.token_for_code(request.args.get('code'),
+    if 'error' not in request.values:
+        token_data, status_code = spotify_helper.token_for_code(request.values.get('code'),
                                                                 url_for('login_completed', _external=True))
         if status_code == 200:
             user = user_helper.create_user(token_data)
@@ -57,7 +57,7 @@ def login_completed():
             return resp
         return render_login_error('Code exchange error', 'HTTP ' + str(status_code), token_data)
     # login error
-    return render_login_error('Login error', request.args.get('error'), '')
+    return render_login_error('Login error', request.values.get('error'), '')
 
 
 @app.route('/admin/dashboard')
