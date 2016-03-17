@@ -49,6 +49,7 @@ Returns list of **playlist** objects with following properties
 1. **uri** spotify uri of the playlist. Use this to play music
 2. **length** playlist actual length. This will be as close to desired length as possible
 3. **type** (wake_up, fall_asleep)
+For new users we use default desired length of **30 minutes**
 
 Example
 ```javascript
@@ -68,9 +69,9 @@ curl -X GET "http://wakeupapp.dev.army/me/playlists" -H "Authorization: ...."
   ]
 }
 ```
+
 Special HTTP status codes:
 1. 428: user data is not processed and playlist cannot be generated. it typically take from 15 to 2 minutes. currently (demo) this is a random time
-2. 404: playlists not found (POST on this resource was never called)
 
 ####/me/playlists/:playlist_type
 Input parameters
@@ -101,6 +102,7 @@ Example Api Session
 1. Execute spotify login. It will end by calling /swap on the server.
   Swap method will create empty user account, generate access token and encrypted refresh token that must be used for authorization.
   Swap method will start generation of the user’s music graph which is later used to construct playlists.
+  Swap method will set desired length for user's playlists to *30 minutes*
 2. Swap method will fail for free spotify users. You can always re-login later.
 3. You can use GET /me/playlists/ to check if music graph is ready.
 4. When graph is ready, client should set playlist length for both playlist types with POST
@@ -119,7 +121,6 @@ Same HTTP status codes should be handled in the same way.
 400|Bad Request. Parameters to request are invalid. See body for details.
 401|Unauthorized. Access to service denied. **You must re-login user with swap service to recover** See body for details
 403|Fobidden. Client will not be serverd no matter what. See body for details
-404|Not Found. See /me/playlist method
 428|Precondition Needed. See /me/playlist method
 500|Internal Server error. Try again later ;>
 
@@ -154,8 +155,8 @@ if both match.
 
 Deployment Information
 -----------------------
-1. API and Swap Service are deployed on http://wakeupapp.dev.army. (AWS/Frankfurt/Micro)
-2. There is admin/test service accessible on http://wakeupapp.dev.army/admin/dashboard. After login you'll see your
+* API and Swap Service are deployed on http://wakeupapp.dev.army. (AWS/Frankfurt/Micro)
+* There is admin/test service accessible on http://wakeupapp.dev.army/admin/dashboard. After login you'll see your
 Authorization header you may use to test with curl
 
 
