@@ -3,6 +3,8 @@
 
 #sleep server specific
 .*.refresh_token
+sleep_server/migrations
+sleep_server/server/.*
 
 # User-specific stuff:
 .idea/workspace.xml
@@ -14,6 +16,7 @@
 # Sensitive or high-churn files:
 .idea/dataSources.ids
 .idea/dataSources.xml
+.idea/dataSources.local.xml
 .idea/sqlDataSources.xml
 .idea/dynamic.xml
 .idea/uiDesigner.xml
