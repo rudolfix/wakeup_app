@@ -50,15 +50,11 @@ def set_playlist(user, playlist_type):
 def handle_api_error(e):
     return json.jsonify(make_error_dict(e)), e.status_code
 
-
-#@app.errorhandler(Exception)
-#def handle_error(e):
+# todo: handle HTTP 500 properly, use flask blueprints to separate admin from api
+# @app.errorhandler(Exception)
+# def handle_error(e):
 #    return json.jsonify(make_error_dict(e)), 500
 
 
 def make_error_dict(e):
     return {'error': { 'status': e.status_code, 'code': e.__class__.__name__, 'message': str(e) }}
-
-# todo: handle API exceptions properly
-# check the authorization token, if user not exists return 401 Access Denied -> must re-login
-# if free user or token seems expired, re-check at spotify, return Forbidden for free user
