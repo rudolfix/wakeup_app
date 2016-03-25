@@ -18,6 +18,7 @@ for example:
 You can obtain refresh and access tokens in your session object (see SDK). Please note that refresh_token is an server encrypted value
 
 Few additional remarks:
+
 1. User need **premium account** to use this sleep app. Free account will not give you access to play lists and streaming
 2. See later on configuring Spotify App, without it you will not login
 3. Refresh spotify sessions as described in SDK
@@ -29,6 +30,7 @@ Few additional remarks:
 Api Methods
 ---------------------------
 There are two playlist types in the API
+
 1. *fall_asleep* will be played when user wants to sleep
 2. *wake_up* will be played when user wants to wake up
 
@@ -46,6 +48,7 @@ POST|/me/playlists/:playlist_type|Create/update given playlist. Should be called
 ####/me/playlists
 This method takes no parameters.
 Returns list of **playlist** objects with following properties
+
 1. **uri** spotify uri of the playlist. Use this to play music
 2. **length** playlist actual length. This will be as close to desired length as possible
 3. **type** (wake_up, fall_asleep)
@@ -71,6 +74,7 @@ curl -X GET "http://wakeupapp.dev.army/me/playlists" -H "Authorization: ...."
 ```
 
 Special HTTP status codes:
+
 1. 428: user data is not processed and playlist cannot be generated. it typically take from 15 to 2 minutes. currently (demo) this is a random time
 
 ####/me/playlists/:playlist_type
@@ -93,8 +97,6 @@ curl -X POST "http://wakeupapp.dev.army/me/playlists/wake_up?desired_length=3000
 }
 ```
 
-Special HTTP error codes:
-1. 428: user data is not processed and playlist cannot be generated. it typically take from 15 to 2 minutes. currently (demo) this is a random time
 
 Example Api Session
 -----------------------
