@@ -35,8 +35,5 @@ def refresh():
     # follow user procedure in SWAP
     token_data, status_code = spotify_helper.refresh_token(user.spotify_refresh_token)
     if status_code == 200:
-        # save new access token
-        user.spotify_access_token = token_data['access_token']
-        user.spotify_token_expiration = token_data['expires_in']
-        user_helper.save_user(user)
+        user_helper.update_refresh_token(user, token_data['access_token'], token_data['expires_in'])
     return json.jsonify(token_data), status_code
