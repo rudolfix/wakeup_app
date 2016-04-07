@@ -72,7 +72,6 @@ def create_user_playlist(user, playlist_type, desired_length):
     source_playlist = spotify_helper.get_playlist_tracks_for_user(user, '1130122659',
                                                            '1v1Do2ukgKZ64wCuOrBnug' if playlist_type == 'wake_up' else
                                                            '4rk4vb5hjM2jC5HFaOKRAL')
-    source_playlist = source_playlist['items']
     # desired length in milliseconds
     if desired_length == 0:
         source_playlist = []
@@ -120,6 +119,13 @@ def check_user_playlists_generation_status(user):
         else:
             user.is_playlists_ready = True
             save_user(user)
+
+
+def update_refresh_token(user, access_token, expires_in):
+    # save new access token
+    user.spotify_access_token = access_token
+    user.spotify_token_expiration = expires_in
+    save_user(user)
 
 
 def save_user(user):

@@ -6,7 +6,7 @@ class Config(object):
     CLIENT_SECRET = '9a97bf95ce2048c2a3df751a50367060'
     ENCRYPTION_IV = '2d04dd0c8d0245c58db445ab24eb8df1'
     ENCRYPTION_KEY = '62b62c1bf34ea7b996cea01662cece92'
-    ECHONEST_API_KEY = 'UFIOCP1DHXIKUMV2H'
+    ECHONEST_API_KEY = 'V91CRTEB0IFMAJBMB'# 'UFIOCP1DHXIKUMV2H'
     CLIENT_CALLBACK_URL = 'luxury8wakeup://spotifylogincallback'
     AUTH_HEADER = 'Basic ' + str(base64.standard_b64encode((CLIENT_ID + ':' + CLIENT_SECRET).encode('ascii')), 'ascii')
     SPOTIFY_ACCOUNTS_ENDPOINT = 'https://accounts.spotify.com'
@@ -18,7 +18,7 @@ class Config(object):
     MOCKUP_MIN_PLAYLIST_GEN_SEC = 15
     MOCKUP_MAX_PLAYLIST_GEN_SEC = 2*60
     MAXIMUM_PLAYLIST_LENGTH = 80*60*1000
-    SQLALCHEMY_DATABASE_URI = 'mysql://dev@localhost/music_graph_dev'
+    SQLALCHEMY_DATABASE_URI = 'mysql://dev@localhost/music_graph_dev2'
     DEBUG = True
 
 

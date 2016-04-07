@@ -54,6 +54,11 @@ class SpotifyApiTokenExpired(ApiException):
         super().__init__(401, 'Expired Spotify access token [%s] [%s]' % (code, msg))
 
 
+class SpotifyApiObjectNotFoundException(ApiException):
+    def __init__(self, code, msg):
+        super().__init__(404, 'Spotify object not found [%s] [%s]' % (code, msg))
+
+
 class SpotifyFreeUserNotSupported(ApiException):
     def __init__(self, username):
         super().__init__(403, 'Free Spotify users are not supported [%s]' % username)

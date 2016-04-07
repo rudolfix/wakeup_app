@@ -5,6 +5,7 @@
 .*.refresh_token
 sleep_server/migrations
 sleep_server/server/.*
+.ipynb_checkpoints/
 
 # User-specific stuff:
 .idea/workspace.xml
