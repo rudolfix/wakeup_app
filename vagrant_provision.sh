@@ -7,6 +7,9 @@ apt-get -y install python3-scipy
 apt-get -y install git
 apt-get -y install libpcre3 libpcre3-dev
 apt-get -y install libmysqlclient-dev
+apt-get -y install python3-matplotlib
+apt-get -y install graphviz libgraphviz-dev pkg-config
+sudo pip3 install pygraphviz --install-option="--include-path=/usr/include/graphviz" --install-option="--library-path=/usr/lib/graphviz/"
 pip3 install -r /vagrant/requirements.txt
 #add development server to localhosts
 echo "0.0.0.0 dev.wakeupapp.com wakeupapp.com" >> /etc/hosts
@@ -16,9 +19,12 @@ mkdir /home/vagrant/user_storage/
 #install mysql
 apt-get -y install mysql-server # vagrant root password is oiqwj0a-a
 #set binding ip address https://help.ubuntu.com/12.04/serverguide/mysql.html: /etc/mysql/my.cnf to 0:0:0:0, port 3306
+#set strict mode sql-mode        = TRADITIONAL,ANSI_QUOTES
 #mysql -u root -p then CREATE USER 'dev'@'%';CREATE DATABASE music_graph;GRANT ALL ON music_graph.* TO 'dev'@'%';
 
-
+#install jupyter
+pip3 install jupyter
+#jupyter notebook --ip='*' --port 5002 --no-browser .
 
 #configure python dev web server port forwarding from loopback to eth0
 #sysctl -w net.ipv4.conf.eth0.route_localnet=1
