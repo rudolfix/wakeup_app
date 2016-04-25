@@ -1,9 +1,15 @@
 # coding: utf-8
 # sqlacodegen mysql://dev@localhost/music_graph > models.py
-from api import db
+from server import db
 from sqlalchemy import Column, Float, ForeignKey, Integer, String, DateTime
 from sqlalchemy.orm import relationship, validates
 import datetime
+from enum import Enum
+
+
+class GenreSourceType(Enum):
+    echonest = 1,
+    infered = 2
 
 
 class Validators:
@@ -27,8 +33,18 @@ class ArtistGenres(Base):
     ArtistId = Column('ArtistId', ForeignKey('Artists.ArtistId', ondelete='CASCADE'), primary_key=True, nullable=False)
     GenreId = Column('GenreId', ForeignKey('Genres.GenreId'), primary_key=True, nullable=False, index=True)
     Ord = Column(Integer, nullable=False)
+    SourceType = Column(Integer, nullable=False)
 
     Genre = relationship('Genre')
+
+
+class ArtistAdditionalSpotifyIds(Base):
+    __tablename__ = 'ArtistAdditionalSpotifyIds'
+
+    ArtistId = Column(ForeignKey('Artists.ArtistId', ondelete='CASCADE'), nullable=False, index=True)
+    SpotifyId = Column(String(128), primary_key=True, unique=True)
+
+    # Artist = relationship('Artist')
 
 
 class Artist(Base, Validators):
@@ -45,6 +61,7 @@ class Artist(Base, Validators):
     SimilarArtistsUpdatedAt = Column(DateTime)
 
     Genres = relationship('ArtistGenres', cascade="all, delete-orphan")
+    AdditionalSpotifyIds = relationship('ArtistAdditionalSpotifyIds', cascade="all, delete-orphan")
 
     @validates('Name')
     def validate_name(self, key, value):
@@ -80,6 +97,17 @@ class SimilarArtist(Base):
 
     Artist = relationship('Artist', primaryjoin='SimilarArtist.ArtistId == Artist.ArtistId')
     Artist1 = relationship('Artist', primaryjoin='SimilarArtist.SimilarArtistId == Artist.ArtistId')
+
+
+class SimilarGenre(Base):
+    __tablename__ = 'SimilarGenres'
+
+    GenreId = Column(ForeignKey('Genres.GenreId'), primary_key=True, nullable=False)
+    SimilarGenreId = Column(ForeignKey('Genres.GenreId'), primary_key=True, nullable=False, index=True)
+    Similarity = Column(Float, nullable=False)
+
+    Genre = relationship('Genre', primaryjoin='SimilarGenre.GenreId == Genre.GenreId')
+    Genre1 = relationship('Genre', primaryjoin='SimilarGenre.SimilarGenreId == Genre.GenreId')
 
 
 class SongGroup(Base):
