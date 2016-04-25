@@ -1,6 +1,10 @@
 #this will be a proper docker file later
 #instance DNS 52.28.90.131 wakeupapp.dev.army
 #ssh -i sleep_server.pem ubuntu@wakeupapp.dev.army
+#install uwsgi
+#set UWSGI_PROFILE_OVERRIDE=ssl=true;routing=true;pcre=true
+#pip3 install uwsgi
+#letsencrypt used for ssl cert https://letsencrypt.readthedocs.org/en/latest/using.html#installation
 
 #create dirs
 ##mkdir /home/ubuntu/wakeupapp
