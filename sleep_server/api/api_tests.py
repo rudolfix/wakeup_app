@@ -1,12 +1,12 @@
 import os
+from contextlib import contextmanager
+
+import pytest
+from flask import url_for, appcontext_pushed, json
+
 import api
 from api import user_helper
-from spotify import spotify_helper
-from flask import url_for, appcontext_pushed, json
-import pytest
-from contextlib import contextmanager
-import requests
-import urllib.parse
+from common import spotify_helper
 
 
 @contextmanager
