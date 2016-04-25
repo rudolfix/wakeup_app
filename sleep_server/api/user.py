@@ -1,46 +1,25 @@
-import uuid
 import pickle
-from api import app
 from api.exceptions import *
-from datetime import datetime, timezone, timedelta
+from api import app
+from datetime import datetime
+from common.user_base import UserBase
 import cryptoparams
 
 
-class User:
-    version = 1 # class variable they say
+class User(UserBase):
+    version = 1
 
     def __init__(self, sp_id):
-        # define all instance variables
+        super().__init__(sp_id)
         self.is_new = True
-        self.spotify_id = sp_id
-        self.spotify_access_token = None
-        self.spotify_refresh_token = None
-        self.user_id = uuid.uuid4().hex # always generate
         self.playlists = []
-        self._spotify_token_expiration = None
-        self.created_at = datetime.now(timezone.utc)
+        self.created_at = datetime.utcnow()
         self.updated_at = None
         self.is_playlists_ready = False
 
-    # @classmethod
-    # def from_sp__token_data(self, sp_id, sp_token, sp_encrypted_refresh_token, ap_token_expiration_seconds):
-    #    pass
-    @property
-    def spotify_token_expiration(self):
-        return self._spotify_token_expiration
-
-    @spotify_token_expiration.setter
-    def spotify_token_expiration(self, value_seconds):
-        now = datetime.now(timezone.utc)
-        self._spotify_token_expiration = (now + timedelta(seconds=value_seconds))
-
-    @property
-    def authorization_string(self):
-        return User.encrypt_user_secret(self.spotify_id) + ' ' + self.spotify_access_token
-
-    #@staticmethod
-    #def as_user(dct):
-    #    if '__user__' in dct:
+    @staticmethod
+    def upgrade_user(user):
+        pass
 
     @staticmethod
     def serialize(user, file):
@@ -50,10 +29,15 @@ class User:
     @staticmethod
     def deserialize(file):
         user = pickle.load(file)
+        User.upgrade_user(user)
         if user._version != User.version:
             raise UserRecordVersionMismatch(user._version, User.version)
         user.is_new = False
         return user
+
+    @property
+    def authorization_string(self):
+        return User.encrypt_user_secret(self.spotify_id) + ' ' + self.spotify_access_token
 
     @staticmethod
     def decrypt_user_secret(secret):
@@ -67,4 +51,3 @@ class User:
     def encrypt_user_secret(secret):
         cp = cryptoparams.CryptoParams(app.config['ENCRYPTION_KEY'], app.config['ENCRYPTION_IV'])
         return cp.encrypt(secret)
-
