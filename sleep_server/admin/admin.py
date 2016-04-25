@@ -1,8 +1,10 @@
-from api import app
-from spotify import spotify_helper
-from flask import request, redirect, url_for, make_response, render_template
 from functools import wraps
+
+from flask import request, redirect, url_for, make_response, render_template
+
+from api import app
 from api import user_helper
+from common import spotify_helper
 
 
 def spotify_authorized(f):
