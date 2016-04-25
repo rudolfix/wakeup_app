@@ -1,16 +1,20 @@
-from api import app
-import os.path, shutil
-from functools import reduce
-import pickle
-from datetime import datetime, timezone
-from api.user import User
-from api.exceptions import *
-from spotify import spotify_helper
-import random
 import math
+import os.path
+import pickle
+import random
+import shutil
+from functools import reduce
+from datetime import datetime
+
+from api import app
+from api.exceptions import *
+from api.user import User
+from common import spotify_helper
+from common.exceptions import *
 
 
 possible_list_types = ['wake_up', 'fall_asleep']
+predefined_playlists = {'wake_up': '*Sleep App - Wake Up*', 'fall_asleep': '*Sleep App - Fall Asleep*'}
 
 
 def create_user(token_data):
@@ -18,7 +22,7 @@ def create_user(token_data):
     sp_record = spotify_helper.get_current_user_by_token(token_data['access_token'])
     # bail on free users
     if sp_record['product'] != 'premium':
-        raise spotify_helper.SpotifyFreeUserNotSupported(sp_record['id'])
+        raise SpotifyFreeUserNotSupported(sp_record['id'])
     # now load user by spotify id as it may already exist (we cant assume we track all tokens etc.)
     user = load_user(sp_record['id'])
     # set user name to the new/restored record & etc & save
@@ -89,9 +93,7 @@ def create_user_playlist(user, playlist_type, desired_length):
             source_playlist.remove(rem_item)
             actual_length = pl_len(source_playlist)
     # create/update spotify playlist
-    sp_user_pl = spotify_helper.get_or_create_playlist_by_name(user,
-                                                               '*Sleep App - Wake Up*' if playlist_type == 'wake_up' else
-                                                               '*Sleep App - Fall Asleep*')
+    sp_user_pl = spotify_helper.get_or_create_playlist_by_name(user, predefined_playlists[playlist_type])
     spotify_helper.set_playlist_content(user, sp_user_pl['id'], [item['track']['uri'] for item in source_playlist])
     # save user records
     user_pl_meta = {'type': playlist_type, 'uri': sp_user_pl['uri'], 'length': actual_length}
@@ -114,18 +116,11 @@ def check_user_playlists_generation_status(user):
         # mockup playlist wait time max 2 mins, min 15 sec
         min_gen = app.config['MOCKUP_MIN_PLAYLIST_GEN_SEC']
         max_gen = app.config['MOCKUP_MAX_PLAYLIST_GEN_SEC']
-        if (datetime.now(timezone.utc) - user.created_at).seconds < random.randrange(min_gen, max_gen):
+        if (datetime.utcnow() - user.created_at).seconds < random.randrange(min_gen, max_gen):
             raise PlaylistsDataNotReadyException()
         else:
             user.is_playlists_ready = True
             save_user(user)
-
-
-def update_refresh_token(user, access_token, expires_in):
-    # save new access token
-    user.spotify_access_token = access_token
-    user.spotify_token_expiration = expires_in
-    save_user(user)
 
 
 def save_user(user):
@@ -138,7 +133,7 @@ def save_user(user):
 
     path = app.config['USER_STORAGE_URI'] + user.spotify_id
     with open(path, 'bw') as f:
-        user.updated_at = datetime.now(timezone.utc)
+        user.updated_at = datetime.utcnow()
         User.serialize(user, f)
 
 
