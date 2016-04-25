@@ -1,51 +1,57 @@
 import inspect
 import os
-from ordered_set import OrderedSet
-from sqlalchemy import select as sqlselect, exists as sqlexists
+from sqlalchemy import select as sqlselect, exists as sqlexists, text as sqltext
 
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parentdir = os.path.dirname(currentdir)
-os.sys.path.insert(0,parentdir)
-from api import user_helper, db
-from spotify import spotify_helper
-from server import song_helper
+os.sys.path.insert(0, parentdir)
+from common import spotify_helper
+from server import db, song_helper, echonest_helper
 from server.models import Artist, Song
-from server import echonest_helper
-from server.exceptions import EchonestApiObjectNotFoundException
+from common.user_base import UserBase
 
 
-def get_similar_artists(spotify_user_id, spotify_artist_id, force_update=False):
-    _, genres_name = song_helper.db_load_genres()
-    # get root artist and force update so we have roundtrip to spotify
-    root_db_a = song_helper.transfer_artist_from_spotify(spotify_artist_id, genres_name, force_update=True)
-    if root_db_a is None:
-        return
-    db.session.commit()
-    user = user_helper.load_user(spotify_user_id)
-    similar_artists = OrderedSet()
-    sp_similar_artists = spotify_helper.get_similar_artists(user, spotify_artist_id)
-    if sp_similar_artists is None:
-        print('Artist id %s not found in Spotify(similar) anymore' % spotify_artist_id)
-        song_helper.db_mark_artist_spotify_not_found(root_db_a.ArtistId)
-        db.session.commit()
-        # raise EchonestApiObjectNotFoundException(spotify_artist_id, 'id not found')
-    else:
-        for sp_artist in sp_similar_artists['artists']:
-            db_a = song_helper.transfer_artist_from_spotify(sp_artist['uri'], genres_name)
-            if db_a is not None:
-                db.session.commit()
-                similar_artists.add(db_a.ArtistId)
-    song_helper.db_update_similar_artists(root_db_a.ArtistId, similar_artists, overwrite=True)
-    db.session.commit()
+def process_rows(user, genres_name, rows, force_update):
+    cnt = len(rows)
+    print('will process %i artists' % cnt)
+    for row in rows:
+        # get root artist and force update so we have roundtrip to spotify
+        root_db_a, _ = song_helper.transfer_artist(row[0], genres_name, force_update=force_update)
+        if root_db_a is not None:
+            song_helper.transfer_similar_artists(user, root_db_a, genres_name)
+        cnt -= 1
+        if cnt % 10 == 0:
+            print('%i artists left' % cnt)
+    print('done')
 
 
-def gather_similar_artists(spotify_user_id):
-    # find similar artists for all not checked in db
+def gather_similar_artists_with_songs(user, genres_name, force_update):
     s = sqlselect([Artist.SpotifyId]).where((Artist.SimilarArtistsUpdatedAt == None) &
                                             (sqlexists().where(Artist.ArtistId == Song.ArtistId)))
-    rows = db.session.execute(s).fetchall()
-    for row in rows:
-        get_similar_artists(spotify_user_id, row[0])
+    process_rows(user, genres_name, db.session.execute(s).fetchall(),force_update)
+
+
+def gather_similar_artists(user, genres_name, force_update):
+    # find similar artists for all not checked in db
+    s = sqlselect([Artist.SpotifyId]).where(Artist.SimilarArtistsUpdatedAt == None)
+    process_rows(user, genres_name, db.session.execute(s).fetchall(), force_update)
+
+
+def gather_similar_artists_for_group(user, genres_name, group_id, force_update):
+    s = sqltext('SELECT a.SpotifyId FROM Artists a WHERE EXISTS '
+                '(SELECT 1 FROM Songs s JOIN SongGroups sg ON s.SongId = sg.SongId '
+                'WHERE a.ArtistId = s.ArtistId AND sg.GroupId = %i)' % group_id) # AND a.SimilarArtistsUpdatedAt IS NULL
+
+    process_rows(user, genres_name, db.session.execute(s).fetchall(), force_update)
+
+
+def gather_similar_artists_for_group_type(user, genres_name, group_type, force_update):
+    s = sqltext('SELECT a.SpotifyId FROM Artists a WHERE EXISTS '
+                '(SELECT 1 FROM Songs s JOIN SongGroups sg ON s.SongId = sg.SongId '
+                'JOIN Groups g ON g.GroupId = sg.GroupId '
+                'WHERE a.ArtistId = s.ArtistId AND g.Type = %i AND a.SimilarArtistsUpdatedAt IS NULL)' % group_type)
+
+    process_rows(user, genres_name, db.session.execute(s).fetchall(), force_update)
 
 
 if __name__ == '__main__':
@@ -53,5 +59,9 @@ if __name__ == '__main__':
     spotify_helper.refresh_token_on_expired = True
     spotify_helper.return_None_on_not_found = True
     echonest_helper.return_None_on_not_found = True
+    #gather_similar_artists_for_group_type('rudolfix-us', 1)
+    _, genres_name = song_helper.db_get_genres()
+    user = UserBase.from_file('test_accounts/rudolfix-us.json')
+    gather_similar_artists(user, genres_name, False)
     # get_similar_artists('rudolfix-us', 'spotify:artist:6Ma3X8b9TtSSKjFehyI4ez')
-    gather_similar_artists('rudolfix-us')
+    # gather_similar_artists_for_group('rudolfix-us', 66)

@@ -1,4 +1,3 @@
-# crawl echo nest api and store songs information from top genres
 import inspect
 from operator import itemgetter
 import pickle
@@ -8,8 +7,8 @@ from sqlalchemy import select as sqlselect
 
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parentdir = os.path.dirname(currentdir)
-os.sys.path.insert(0,parentdir)
-from api import app, db
+os.sys.path.insert(0, parentdir)
+from server import db
 from server import song_helper, echonest_helper
 from server.models import Artist, ArtistGenres
 
@@ -35,14 +34,13 @@ def convert_check_artists():
             return p[0], p[1].ArtistId, p[1].EchonestId
         check_artists = [(p2t(p)) for p in check_artists]
     with open(_CHECK_ARTISTS_FILE, 'bw+') as f:
-        pickle.dump(check_artists, f, protocol=0) # save in ASCII protocol
+        pickle.dump(check_artists, f, protocol=0)  # save in ASCII protocol
 
 
 def gather_genres_and_artists(check_top_artists):
     new_genres = song_helper.update_genres_from_echonest()
-    db.session.commit()
     print('inserted %i new genres to db' % new_genres)
-    genres_id, genres_name = song_helper.db_load_genres()
+    genres_id, genres_name = song_helper.db_get_genres()
 
     # enumerate genres and gather all artist ids to check, insert artists to db
     check_artists = []
@@ -97,7 +95,7 @@ def gather_artists_from_db(_):
     return check_artists
 
 
-def save_top_songs(check_artists, check_top_artist_songs, is_top_list = 1):
+def save_top_songs(check_artists, check_top_artist_songs, song_type):
     # get hottest songs from the artists and store them in db
     steps = -1
     for genre_id, artist_id, echo_id in check_artists:
@@ -105,7 +103,7 @@ def save_top_songs(check_artists, check_top_artist_songs, is_top_list = 1):
         steps += 1
         with open(_CURRENT_ARTIST_FILE, 'w+') as f:
             f.write(str(artist_id))
-        print('processing genre id %i, artists left %i' % (genre_id, len(check_artists) - steps))
+        print('processing genre id %i, artists left %i' % (genre_id or -1, len(check_artists) - steps))
         # get hottest songs for an artist (beware duplicate songs - check spotify id)
         # http://developer.echonest.com/api/v4/song/search?api_key=UFIOCP1DHXIKUMV2H&format=json&results=10&artist_id=AR6F6I21187FB5A3AA&sort=song_hotttnesss-desc&bucket=id:spotify&bucket=audio_summary
         while True:
@@ -119,7 +117,7 @@ def save_top_songs(check_artists, check_top_artist_songs, is_top_list = 1):
 
         processed_songs = {}
         for song in songs['songs']:
-            song_helper.db_update_song(song, artist_id, genre_id, is_top_list, processed_songs)
+            song_helper.db_update_song(song, artist_id, genre_id, song_type, processed_songs)
 
         # whole artist must be written at once
         db.session.commit()
@@ -130,7 +128,7 @@ def save_top_songs(check_artists, check_top_artist_songs, is_top_list = 1):
     os.rename(_CHECK_ARTISTS_FILE, '.check_artists_done')
 
 
-def gather_top_songs(artist_provider, check_top_artists=15, check_top_artist_songs=100, is_top_list=1):
+def gather_top_songs(artist_provider, check_top_artists=15, check_top_artist_songs=100, song_type=1):
     # check if zip with artists and genres is present, if so go to songs stage
     if os.path.isfile(_CHECK_ARTISTS_FILE):
         with open(_CHECK_ARTISTS_FILE, 'br') as f:
@@ -152,12 +150,13 @@ def gather_top_songs(artist_provider, check_top_artists=15, check_top_artist_son
         check_artists = filtered_artists
     else:
         check_artists = artist_provider(check_top_artists)
-    save_top_songs(check_artists, check_top_artist_songs)
+    save_top_songs(check_artists, check_top_artist_songs, song_type)
 
 
 if __name__ == '__main__':
+    # crawl echo nest api and store songs information from top genres
     # server mode for echonest client
     echonest_helper.return_None_on_not_found = True
-    #gather_top_songs(gather_genres_and_artists, is_top_list = 1)
-    gather_top_songs(gather_artists_from_db, is_top_list=0)
+    #gather_top_songs(gather_genres_and_artists, song_type = 1)
+    gather_top_songs(gather_artists_from_db, song_type=0)
     # convert_check_artists()
