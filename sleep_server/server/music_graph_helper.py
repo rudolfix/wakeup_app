@@ -9,7 +9,7 @@ from operator import itemgetter
 from itertools import islice
 
 from common.common import get_first
-from server import song_helper
+from server import app, song_helper
 
 _feature_names = ['energy', 'liveness', 'tempo', 'speechiness', 'acousticness', 'instrumentalness', 'loudness',
                   'valence', 'danceability', 'key', 'mode', 'time_signature']
@@ -59,8 +59,6 @@ def load_user_library_song_features(library):
     song_features[:, :-5] = rows
     # None maps to NaN, zero it
     song_features[np.isnan(song_features)] = 0
-    # print(rows[:-5])
-    # print(song_features[:-5])
     # index tracks
     indexed_tracks = {}
     for track in library.tracks.values():
@@ -70,7 +68,6 @@ def load_user_library_song_features(library):
     idx = 0
     for song_id in np.nditer(song_features[:, 13]):  # , op_flags=['readwrite']
         # add popularity, now - added_at(hours), user_preference, playlists (count)
-        # print(song_id)
         track = indexed_tracks[int(song_id)]
         song = song_features[idx]
         song[16] = track['popularity']
@@ -107,6 +104,7 @@ def f_val_prc(i, f):
 
 
 def is_sleep_song(features):
+    # todo: work on sleep threshold here maybe by training SVM model on very sleepy and energetic songs
     energy_val = f_val_prc(0, features)
     return energy_val < 0.6
 
@@ -178,9 +176,7 @@ def find_closest_song(ref_song, songs, distance_features, randlimit=5):
             lambda y, x: y + (x[0] - x[1]) ** 2, zip(ref_song[distance_features], song[distance_features]), 0))
 
     distances = np.apply_along_axis(ec_dist, 1, songs)
-    # print(distances[:100])
     min_dis_idx = np.argsort(distances)[:randlimit][random.randint(0, min(randlimit - 1, len(distances) - 1))]
-    # print(distances[min_dis_idx])
     return min_dis_idx
 
 
@@ -229,8 +225,6 @@ def _compute_genres_for_songs(lib_song_features, followed_artists, genres_affini
 
     # lambda f: (sleepines(f)-min_sleepiness)/(max_sleepiness-min_sleepiness)
     # genre_sleepiness = np.apply_along_axis(sleepines, 1, genre_features)
-    # print(genres_count.shape)
-    # print(genre_sleepiness.shape)
     # genres_count_weighted = np.multiply(genres_count,genre_sleepiness[:len(genres_count)])
     tot_in_sleep = sum(genres_count[genres_affinity[:len(genres_count)] > affinity_threshold])
     # print(tot_in_sleep)
@@ -261,7 +255,7 @@ def get_random_song_slice_with_length(song_features, desired_length, add_margin)
         c_len += s[_f_duration_id_i]
         if c_len > tot_len:
             break
-        idx+=1
+        idx = (idx + 1) % tot_songs
 
     return songs, c_len
 
@@ -392,7 +386,7 @@ def init_similar_genres_from_similar_artists(artists_genres, connected_metric_f=
     n_nodes = len(genre_similarity)
     n_pos_edges = n_nodes * (n_nodes - 1) / 2
     prob_edge = edge_count / n_pos_edges
-    print('%i nodes, %i possible edges, %i real edges, %f prob of an edge' % (n_nodes, n_pos_edges, edge_count,
+    app.logger.debug('%i nodes, %i possible edges, %i real edges, %f prob of an edge' % (n_nodes, n_pos_edges, edge_count,
                                                                               prob_edge))
     # should be modelled as binomial dbinom(x, edge_count, 1/n_pos_edges) but with small p we use poisson
     cp = 0
@@ -402,11 +396,11 @@ def init_similar_genres_from_similar_artists(artists_genres, connected_metric_f=
         p = math.pow(prob_edge, n_e) * math.pow(math.e, -prob_edge) / math.factorial(n_e)
         cp += p
         noise_edges = math.ceil((1 - cp) * n_pos_edges)
-        print('----prob of %i edges = %f, %i noise edges may be stil created' % (n_e, p, noise_edges))
+        app.logger.debug('----prob of %i edges = %f, %i noise edges may be stil created' % (n_e, p, noise_edges))
         if noise_edges < max_noise_edges:
             min_connections = n_e + 1
             break
-    print('connections below %i will be pruned' % min_connections)
+    app.logger.debug('connections below %i will be pruned' % min_connections)
 
     # using similar artists will never be necessary. we already have too much data from co occurence
     # if use_foreign_sim:
@@ -424,7 +418,6 @@ def init_similar_genres_from_similar_artists(artists_genres, connected_metric_f=
 
     # find maximally connected genre
     max_g = max([(i[0], connected_metric_f(i[1].values())) for i in genre_similarity.items()], key=itemgetter(1))
-    print('found max')
     # print(max_g)
     # print(genres[max_g[0]])
     # normalize weights
@@ -458,7 +451,7 @@ def init_connect_genre_graph_components(graph, max_distance, genres, genres_name
                    'reggae': 'reggae', 'jazz': 'contemporary jazz'}
     all_nodes = list(graph.nodes())
     for comp in g_comps[:-1]:
-        print('cliq len %i: %s' % (len(comp), comp))
+        app.logger.debug('cliq len %i: %s' % (len(comp), comp))
         for fragment, gn in connect_via.items():
             to_connect = [c for c in comp if fragment in genres[c]]
             if to_connect:
@@ -476,7 +469,6 @@ def compute_sleep_clusters():
         if gid in G.genres:
             gname = G.genres[gid]
             if gname not in _blocked_sleep_genres and sleepiness > _is_sleep_genre_threshold:
-                print('yielding %s[%i]' % (gname, gid))
                 yield gid, init_extract_genre_clusters(gid, _dist_mod_sleep, sleepines, is_sleep_song)
 
 
