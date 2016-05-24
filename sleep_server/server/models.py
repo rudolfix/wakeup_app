@@ -135,7 +135,7 @@ class Song(Base, Validators):
     SongId = Column(Integer, primary_key=True, unique=True, autoincrement=True)
     EchonestId = Column(String(128), nullable=False, unique=True)
     Name = Column(String(128, 'utf8_unicode_ci'), nullable=False)
-    ArtistId = Column(ForeignKey('Artists.ArtistId'), nullable=False, index=True)
+    ArtistId = Column(ForeignKey('Artists.ArtistId', ondelete='CASCADE'), nullable=False, index=True)
     GenreId = Column(ForeignKey('Genres.GenreId'), index=True)
     DurationMs = Column(Integer, nullable=False)
     Hotness = Column(Float, nullable=False)
