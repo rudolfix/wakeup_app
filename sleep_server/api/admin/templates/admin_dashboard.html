@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Admin Dashboard</title>
+    <style media="screen">
+        .green {color:green}
+        .red {color:red}
+    </style>
+</head>
+<body>
+    <h1>Hello {{ user.spotify_id }}!</h1>
+    <form action="{{ url_for('admin.actions') }}" method="post">
+    {% if lib_status %}
+        Your library is {% if lib_status['is_resolved'] %}
+            <span class="green">resolved</span>
+            {% else %}
+            <span class="red">unresolved</span>
+        {% endif %}, resolution is
+        {% if lib_status['can_be_updated'] %}
+            <span class="green">not in progress</span> <button name="action" type="submit" value="resolve">RESOLVE</button>
+            {% else %}
+            <span class="red">in progress</span>
+        {% endif %}
+        <br/>
+        library created {{ lib_status['created_ago'] }} days ago ({{ lib_status['created_at'] }})
+        library resolved {{ lib_status['updated_ago'] }} days ago ({{ lib_status['updated_at'] }})
+        {% if lib_status['is_resolved'] %}
+            <h3>Fall asleep playlists</h3>
+            Current playlist <b>{{ user_playlists['fall_asleep']['name'] }}</b>
+            {% if user_playlists['fall_asleep']['uri'] %} <span class="green">created</span> length {{ user_playlists['fall_asleep']['length'] / (60 * 1000) }}
+            {% else %} <span class="red">not created</span> {% endif %}
+            <br/>
+            <input type="number" name="fall_asleep_dl" min="10" max="80" step="1" value="{{ user_playlists['fall_asleep']['desired_length'] / (60 * 1000) }}"/> minutes
+            <button name="action" type="submit" value="fall_asleep_auto">CHOOSE AUTOMATICALLY</button> or from the list<br/>
+            {% if possible_playlists['fall_asleep'] %}
+                <table>
+                {% for pl in possible_playlists['fall_asleep'] %}
+                    <tr>
+                    <td><b>{{ pl['name'] }}</b> cardinality {{ pl['card']*100 }} pref {{ pl['pref'] }}</td>
+                    <td><button name="action" type="submit" value="fall_asleep:{{ pl['plid'] }}">SET</button></td>
+                    </tr>
+                {% endfor %}
+                </table>
+            {% endif %}
+        {% endif %}
+    {% endif %}
+    </form>
+    <h3>Internal info</h3>
+    <ul>
+        <li>Authorization header: {{ user.authorization_string }}</li>
+        <li>Spotify Refresh Token: {{ user.spotify_refresh_token }}</li>
+        <li>Access Token: {{ user.spotify_access_token }}</li>
+    </ul>
+</body>
+</html>
