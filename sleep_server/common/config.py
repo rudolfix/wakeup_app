@@ -7,3 +7,4 @@ class ConfigBase:
     SPOTIFY_ACCOUNTS_ENDPOINT = 'https://accounts.spotify.com'
     SPOTIFY_LOGIN_SCOPE = 'playlist-read-private playlist-read-collaborative playlist-modify-private user-follow-read user-library-read user-read-private user-top-read'
     AUTH_HEADER = 'Basic ' + str(base64.standard_b64encode((SPOTIFY_CLIENT_ID + ':' + SPOTIFY_CLIENT_SECRET).encode('ascii')), 'ascii')
+    MUSIC_GRAPH_SERVER_ENDPOINT = 'http://localhost:5001'
