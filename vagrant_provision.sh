@@ -39,3 +39,6 @@ pip3 install jupyter
 #apt-get -y install liblapacke-dev checkinstall
 #apt-get -y install liblapack-doc checkinstall
 
+# make log directory
+mkdir /var/log/sleep_server/
+chmod 757 /var/log/sleep_server/
