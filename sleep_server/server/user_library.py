@@ -2,6 +2,11 @@ from enum import Enum
 import re
 import pickle
 import os
+from functools import reduce
+from random import random
+from bisect import bisect
+from itertools import accumulate
+
 from common.common import *
 from common import spotify_helper
 from server.exceptions import *
@@ -10,6 +15,7 @@ from server import app, song_helper
 
 class UserLibrary:
     version = 1
+    storage_extension = '.library'
 
     def __init__(self, spotify_id):
         self.is_new = True
@@ -27,7 +33,7 @@ class UserLibrary:
         return self.tracks is not None
 
     @staticmethod
-    def upgrade_user(user):
+    def upgrade_record(user):
         pass
 
     @staticmethod
@@ -38,9 +44,42 @@ class UserLibrary:
     @staticmethod
     def deserialize(file):
         library = pickle.load(file)
-        UserLibrary.upgrade_user(library)
+        UserLibrary.upgrade_record(library)
         if library._version != UserLibrary.version:
             raise LibraryRecordVersionMismatchException(library._version, UserLibrary.version)
+        library.is_new = False
+        return library
+
+
+class UserLibraryProps:
+    version = 1
+    storage_extension = '.library_props'
+
+    def __init__(self, spotify_id):
+        self.is_new = True
+        self.spotify_id = spotify_id
+        self.selected_playlists = {}
+        self.created_at = datetime.utcnow()
+        self.updated_at = None
+        # fill playlist types
+        for pt in possible_list_types:
+            self.selected_playlists[pt] = []
+
+    @staticmethod
+    def upgrade_record(user):
+        pass
+
+    @staticmethod
+    def serialize(library, file):
+        library._version = UserLibraryProps.version
+        pickle.dump(library, file, protocol=4)
+
+    @staticmethod
+    def deserialize(file):
+        library = pickle.load(file)
+        UserLibraryProps.upgrade_record(library)
+        if library._version != UserLibraryProps.version:
+            raise LibraryRecordVersionMismatchException(library._version, UserLibraryProps.version)
         library.is_new = False
         return library
 
@@ -59,6 +98,28 @@ def _extract_user_track(track, added_at, package_id, source):
     return {'spotify_id': track['uri'], 'song_id': None, 'package_id': package_id, 'source': source,
             'popularity': track['popularity'] or 0, 'artist_sp_ids': [artist['uri'] for artist in track['artists']],
             'artist_id': None, 'added_at': added_at, 'user_preference': 0, 'playlists': []}
+
+
+def _delete_library(spotify_id, lib_class):
+    path = app.config['USER_STORAGE_URI'] + spotify_id + lib_class.storage_extension
+    if os.path.isfile(path):
+        os.remove(path)
+
+def _load_library(spotify_id, lib_class):
+    path = app.config['USER_STORAGE_URI'] + spotify_id + lib_class.storage_extension
+    if os.path.isfile(path):
+        try:
+            with open(path, 'br') as f:
+                library = lib_class.deserialize(f)
+                library.is_new = False
+        except (pickle.PickleError, TypeError, EOFError):
+            # delete file and raise
+            os.remove(path)
+            raise
+        return library
+    else:
+        library = lib_class(spotify_id) # return empty record
+        return library
 
 
 def build_user_library(user, library):
@@ -203,25 +264,45 @@ def resolve_user_library(library, genres_name):
     return indexed_songs, found_songs, not_found_songs, new_artists
 
 
+def get_best_playlist_id(playlist_type, library, possible_clusters, keep_n_last = 5):
+    # get N best possible clusters that are were not yet used, ps format
+    # (pl_id, prevalence, genres_affinity[i], genres_pref[i])
+    library_props = load_library_props(library.spotify_id)
+    sel_pl = library_props.selected_playlists[playlist_type]
+    possible_pl = [pl[0] for pl in possible_clusters]
+    non_sel_pl = [pl for pl in possible_clusters if pl[0] not in sel_pl]
+    if len(non_sel_pl) == 0:
+        # get first cluster from sel_list (oldest)
+        f_plid = get_first(sel_pl, lambda plid: plid in possible_pl)
+        non_sel_pl = [get_first(possible_clusters, lambda pl: pl[0] == f_plid)]
+    # create cumulative weights for possible pl
+    tot_w = reduce(lambda x,y: x + y[3], non_sel_pl, 0)
+    non_sel_pl_cumul = list(accumulate([pl[3]/tot_w for pl in non_sel_pl]))
+    # non_sel_pl_cumul.append(1.00001)
+    mass = random()
+    pl_idx = bisect(non_sel_pl_cumul, mass)
+    if pl_idx > len(non_sel_pl_cumul):
+        pl_idx = len(non_sel_pl_cumul) - 1  # for the rare(impossible case we've got mass == 1)
+    print('for mass %f in %s got %i' % (mass, non_sel_pl_cumul, pl_idx))
+    # add to props, save
+    sel_pl_id = non_sel_pl[pl_idx][0]
+    sel_pl.append(sel_pl_id)
+    if len(sel_pl) > keep_n_last:
+        library_props.selected_playlists[playlist_type] = sel_pl[-keep_n_last:]
+    save_library(library_props)
+    return sel_pl_id
+
+
 def load_library(spotify_id):
-    path = app.config['USER_STORAGE_URI'] + spotify_id + '.library'
-    if os.path.isfile(path):
-        try:
-            with open(path, 'br') as f:
-                library = UserLibrary.deserialize(f)
-                library.is_new = False
-        except (pickle.PickleError, TypeError, EOFError):
-            # delete file and raise
-            os.remove(path)
-            raise
-        return library
-    else:
-        library = UserLibrary(spotify_id) # return empty record
-        return library
+    return _load_library(spotify_id, UserLibrary)
+
+
+def load_library_props(spotify_id):
+    return _load_library(spotify_id, UserLibraryProps)
 
 
 def save_library(library):
-    path = app.config['USER_STORAGE_URI'] + library.spotify_id + '.library'
+    path = app.config['USER_STORAGE_URI'] + library.spotify_id + library.storage_extension
     with open(path, 'bw') as f:
         library.updated_at = datetime.utcnow()
-        UserLibrary.serialize(library, f)
+        library.serialize(library, f)
