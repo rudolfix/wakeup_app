@@ -8,5 +8,8 @@ from server import app
 from server import server
 
 if __name__ == '__main__':
+    # init logging
+    server.init_logging()
+    # start server
     server.start()
     app.run(app.config['HOST_NAME'], port=5001, debug=app.config['DEBUG'])
