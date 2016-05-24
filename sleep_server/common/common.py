@@ -3,8 +3,16 @@ import re as regex
 import unicodedata
 
 
+possible_list_types = ['wake_up', 'fall_asleep']
+predefined_playlists = {'wake_up': '*Sleep App - Wake Up*', 'fall_asleep': '*Sleep App - Fall Asleep*'}
+
+
 def parse_iso8601date(s):
     return datetime.strptime(s, '%Y-%m-%dT%H:%M:%SZ')
+
+
+def parse_iso8601datemili(s):
+    return datetime.strptime(s, '%Y-%m-%dT%H:%M:%S.%fZ')
 
 
 def ci_s_normalize(s):

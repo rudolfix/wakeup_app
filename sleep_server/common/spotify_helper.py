@@ -23,7 +23,7 @@ def spotifyapihandler(f):
             # todo: add logging
             # app.logger
             if spoterr.http_status == 401: # invalid or expired token
-                if 'Invalid access token' in  spoterr.msg:
+                if 'Invalid access token' in spoterr.msg:
                     raise SpotifyApiInvalidToken(spoterr.code, spoterr.msg)
                 if 'The access token expired' in spoterr.msg:
                     if refresh_token_on_expired:
@@ -163,7 +163,7 @@ def resolve_tracks_for_user(user, track_mappings):
     # as a result a normalized list is returned (1) song : track 1:1 (2) non existing tracks removed
     # (3) playable whenever possible
     # song_id must be >= 0
-    _, track_ids = zip(*track_mappings)
+    track_ids, _ = zip(*track_mappings)
     spotify_tracks = get_tracks(user, track_ids)
     assert len(spotify_tracks) == len(track_ids), 'number of tracks from spotify must eq no. input tracks'
     added_songs = {}
@@ -171,9 +171,9 @@ def resolve_tracks_for_user(user, track_mappings):
     for track, mapping in zip(spotify_tracks, track_mappings):
         if track is None or not track['is_playable']:
             continue
-        if mapping[0] in added_songs:  # this song was added
+        if mapping[1] in added_songs:  # this song was added
             continue
-        added_songs[mapping[0]] = mapping[1]
+        added_songs[mapping[1]] = mapping[0]
         resolved_tracks.append(track)
     return resolved_tracks, added_songs
 

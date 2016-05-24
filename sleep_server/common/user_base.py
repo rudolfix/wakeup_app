@@ -25,11 +25,11 @@ class UserBase:
         self.spotify_access_token = access_token
         self.spotify_token_expiration = expires_in
 
-    def to_json(self):
+    def to_jsons(self):
         return json.dumps(self.__dict__)
 
     @staticmethod
-    def from_json(jsons):
+    def from_jsons(jsons):
         u = UserBase(None)
         u.__dict__ = json.loads(jsons)
         return u
