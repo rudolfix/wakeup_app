@@ -7,9 +7,9 @@ class PlaylistsDataNotReadyException(ApiException):
 
 
 class PlaylistIncorrectDesiredLength(ApiException):
-    def __init__(self, actual_length, max_length):
-        super().__init__(400, 'Playlists length can be from 0 to %i, actual value is %i' %
-                                           (max_length, actual_length))
+    def __init__(self, actual_length, min_length, max_length):
+        super().__init__(400, 'Playlists length can be from %i to %i, actual value is %i' %
+                                           (min_length, max_length, actual_length))
 
 
 class PlaylistIncorrectType(ApiException):

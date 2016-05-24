@@ -1,7 +1,7 @@
 from functools import wraps
 from flask import json, request
 
-from common import spotify_helper
+from common import spotify_helper, common
 from api.user import User
 from api import app, user_helper
 from api.exceptions import *
@@ -21,9 +21,13 @@ def check_user(f):
 def get_playlists(user):
     # if playlist are not yet ready deny access
     user_helper.check_user_playlists_generation_status(user)
-    # if playlist props were not set deny access
-    if user.playlists is None or len(user.playlists) != 2:
-        raise PlaylistsPropsNotSetException()
+    # if playlist props were not set create playlists with default settings
+    for pl in user.playlists:
+        if pl['uri'] is None:
+            user_helper.create_user_playlist(user, pl['playlist_type'], pl['desired_length'])
+            user_helper.save_user(user)
+    # if user.playlists is None or len(user.playlists) != 2:
+    #     raise PlaylistsPropsNotSetException()
     # serialize json with playlist data which is a list of dictionaries
     # [{ type: 'wake_up|fall_asleep', name: , length: }, ...]
     return json.jsonify(result=user.playlists)
@@ -37,15 +41,16 @@ def set_playlist(user, playlist_type):
         raise PlaylistIncorrectDesiredLength(-1, int(app.config['MAXIMUM_PLAYLIST_LENGTH']))
     desired_length = int(request.values.get('desired_length'))
     # check max and min playlist length. may be 0
-    if desired_length < 0 or desired_length > int(app.config['MAXIMUM_PLAYLIST_LENGTH']):
-        raise PlaylistIncorrectDesiredLength(desired_length, int(app.config['MAXIMUM_PLAYLIST_LENGTH']))
+    min_length = int(app.config['MINIMUM_PLAYLIST_LENGTH'])
+    max_length = int(app.config['MAXIMUM_PLAYLIST_LENGTH'])
+    if desired_length < min_length or desired_length > max_length:
+        raise PlaylistIncorrectDesiredLength(desired_length, min_length, max_length)
 
-    if playlist_type not in user_helper.possible_list_types:
-        raise PlaylistIncorrectType(playlist_type, user_helper.possible_list_types)
+    if playlist_type not in common.possible_list_types:
+        raise PlaylistIncorrectType(playlist_type, common.possible_list_types)
     user_helper.check_user_playlists_generation_status(user)
-
-    user_helper.save_user(user)
     user_pl_meta = user_helper.create_user_playlist(user, playlist_type, desired_length)
+    user_helper.save_user(user)
     return json.jsonify(result=user_pl_meta)
 
 
@@ -60,6 +65,7 @@ def swap():
         user = user_helper.create_user(token_data)
         # init gathering info on music user has
         user_helper.gather_music_data(user)
+        user_helper.save_user(user)
         # refresh token will contain encrypted spotify id
         # todo: designs a better auth system with independent user id. spotify user id allows to recover user record after
         # todo: app is reinstalled or user is logged again
@@ -80,19 +86,20 @@ def refresh():
     token_data, status_code = spotify_helper.refresh_token(user.spotify_refresh_token)
     if status_code == 200:
         user.update_refresh_token(token_data['access_token'], token_data['expires_in'])
+        user_helper.gather_music_data(user)
         user_helper.save_user(user)
     return json.jsonify(token_data), status_code
 
 
 @app.errorhandler(ApiException)
 def handle_api_error(e):
-    return json.jsonify(make_error_dict(e)), e.status_code
-
-# todo: handle HTTP 500 properly, use flask blueprints to separate admin from api
-# @app.errorhandler(Exception)
-# def handle_error(e):
-#    return json.jsonify(make_error_dict(e)), 500
+    return json.jsonify(make_error_dict(e, e.status_code)), e.status_code
 
 
-def make_error_dict(e):
-    return {'error': { 'status': e.status_code, 'code': e.__class__.__name__, 'message': str(e) }}
+@app.errorhandler(Exception)
+def handle_error(e):
+    return json.jsonify(make_error_dict(e, 500)), 500
+
+
+def make_error_dict(e, status_code):
+    return {'error': { 'status': status_code, 'code': e.__class__.__name__, 'message': str(e) }}
