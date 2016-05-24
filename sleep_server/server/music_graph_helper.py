@@ -136,7 +136,8 @@ def lib_song_preference(lib_song):
     # 17 - age, 18 - user_preference, 19 no of playlists, 20 source
     time_score = 0 if lib_song[17] > 20*24 else 1 if lib_song[17] < 3*24 else lib_song[17] / (20*24)
     # print('%i: %f' % (lib_song[17], time_score))
-    source_score = 0.75 if lib_song[20] == 2 else 0
+    source = lib_song[20]
+    source_score = 0.75 if source == 3 else 0.3 if source == 1 else 0
     return time_score + source_score + lib_song[18] + lib_song[19] * 0.2
 
 
