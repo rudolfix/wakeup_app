@@ -6,7 +6,7 @@
 sleep_server/server/migrations
 sleep_server/server/.*
 sleep_server/server/old
-sleep_server/server/test_accounts
+sleep_server/tests/test_accounts
 .ipynb_checkpoints/
 
 # User-specific stuff:
