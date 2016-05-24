@@ -25,8 +25,7 @@ def extract_uniq_track_artist_mappings(tracks):
     return track_mappings
 
 
-def transfer_playlist(spotify_user_id, spotify_playlist_uri, song_group_type, genres_name):
-    user = user_helper.load_user(spotify_user_id)
+def transfer_playlist(user, spotify_playlist_uri, song_group_type, genres_name):
     playlist = spotify_helper.get_playlist_for_user(user, *spotify_helper.split_playlist_uri(spotify_playlist_uri))
     print('will process song group %s(%s) of type %i' % (playlist['name'], spotify_playlist_uri, song_group_type))
     songs_group = song_helper.db_create_song_group(playlist['name'], spotify_playlist_uri,
@@ -42,9 +41,8 @@ def transfer_playlist(spotify_user_id, spotify_playlist_uri, song_group_type, ge
 
 
 def transfer_user_spotify_tracks(user, genres_name):
-    user = user_helper.load_user(spotify_user_id)
     tracks = spotify_helper.get_user_library_tracks(user, datetime.datetime(2008, 1, 1))
-    songs_group = song_helper.db_create_song_group(spotify_user_id + ':library', spotify_user_id+':library',
+    songs_group = song_helper.db_create_song_group(user.spotify_id + ':library', user.spotify_id+':library',
                                                    3, overwrite=True)
     track_mappings = extract_uniq_track_artist_mappings(tracks)
     found_songs, not_found_songs, _ = song_helper.transfer_songs_with_retry(track_mappings, genres_name,
@@ -58,44 +56,12 @@ def transfer_user_spotify_tracks(user, genres_name):
 def resolve_user_library(user, genres_name):
     library = user_library.load_library(user.spotify_id)
     user_library.build_user_library(user, library)
-    track_mappings = [(t['uri', t['artists'][0]]) for t in library.unresolved_tracks.values()]
-    songs, found_songs, not_found_songs, new_artists = song_helper.transfer_songs_with_retry(
-        track_mappings,
-        genres_name,
-        song_type=0)
-    # index songs
-    indexed_songs = {}
-    for song in songs:
-        indexed_songs[song.SongId] = song
-    # resolve tracks
-    for track in library.unresolved_tracks:
-        if track['uri'] in found_songs:
-            song_id = found_songs[track['uri']]
-            track['song_id'] = song_id
-            track['artist_id'] = indexed_songs[song_id].ArtistId
-    library.tracks = library.unresolved_tracks
-    library.unresolved_tracks = None
-    # resolve artists
-    for artist in library.unresolved_artists:
-        db_a, is_new = song_helper.transfer_artist(artist['uri'], genres_name)
-        if db_a is not None:
-            artist['artist_id'] = db_a.ArtistId
-            if is_new:
-                new_artists.append(db_a)
-    library.artists = library.unresolved_artists
-    library.unresolved_artists = None
-    # get similar artists
-    for db_a in new_artists:
-        similar_ids = song_helper.transfer_similar_artists(user, db_a, genres_name)
-        # infer genres
-        if similar_ids:
-            artists_genres = song_helper.db_get_genres_for_artists(similar_ids)
-            song_helper.infer_and_store_genres_for_artist(db_a.ArtistId, similar_ids, artists_genres)
-    user_library.save_user(library)
+    _, _, _, new_artists = user_library.resolve_user_library(library, genres_name)
+    song_helper.infer_and_store_genres_for_artists(user, new_artists, genres_name)
+    user_library.save_library(library)
 
 
-def test_resolve_tracks_for_user(spotify_user_id, song_tuples):
-    user = user_helper.load_user(spotify_user_id)
+def test_resolve_tracks_for_user(user, song_tuples):
     tracks, added_songs = spotify_helper.resolve_tracks_for_user(user, song_tuples)
 
 
@@ -105,8 +71,9 @@ if __name__ == '__main__':
     spotify_helper.return_None_on_not_found = True
     echonest_helper.return_None_on_not_found = True
     _, genres_name = song_helper.db_get_genres()
-    user = UserBase.from_file('test_accounts/rudolfix-us.json')
-    resolve_user_library(user)
+    # rudolfix-us
+    user = UserBase.from_file('test_accounts/1130122659.json')
+    resolve_user_library(user, genres_name)
     # test_resolve_tracks_for_user('rudolfix-us', test_resolve_tracks)
     # transfer_user_library('1130122659', genres_name)
     # transfer_user_library('rudolfix-us', genres_name)

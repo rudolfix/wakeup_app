@@ -1,5 +1,6 @@
 import inspect
 import os
+import time
 from sqlalchemy import select as sqlselect, exists as sqlexists, text as sqltext
 
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
@@ -16,9 +17,14 @@ def process_rows(user, genres_name, rows, force_update):
     print('will process %i artists' % cnt)
     for row in rows:
         # get root artist and force update so we have roundtrip to spotify
-        root_db_a, _ = song_helper.transfer_artist(row[0], genres_name, force_update=force_update)
-        if root_db_a is not None:
-            song_helper.transfer_similar_artists(user, root_db_a, genres_name)
+        try:
+            root_db_a, _ = song_helper.transfer_artist(row[0], genres_name, force_update=force_update)
+            if root_db_a is not None:
+                song_helper.transfer_similar_artists(user, root_db_a, genres_name)
+        except Exception as exc:
+            print(exc)
+            print('will try again')
+            time.sleep(20)
         cnt -= 1
         if cnt % 10 == 0:
             print('%i artists left' % cnt)
@@ -34,6 +40,14 @@ def gather_similar_artists_with_songs(user, genres_name, force_update):
 def gather_similar_artists(user, genres_name, force_update):
     # find similar artists for all not checked in db
     s = sqlselect([Artist.SpotifyId]).where(Artist.SimilarArtistsUpdatedAt == None)
+    process_rows(user, genres_name, db.session.execute(s).fetchall(), force_update)
+
+
+def gather_similar_artists_with_genres(user, genres_name, force_update):
+    # find similar artists for all not checked in db
+    s = sqlselect([Artist.SpotifyId], sqltext('EXISTS (SELECT 1 FROM ArtistGenres ag WHERE ag.ArtistId = '
+                                                        'Artists.ArtistId AND ag.SourceType = 1)'))\
+        .where(Artist.SimilarArtistsUpdatedAt == None)
     process_rows(user, genres_name, db.session.execute(s).fetchall(), force_update)
 
 
