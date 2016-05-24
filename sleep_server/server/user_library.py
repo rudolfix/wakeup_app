@@ -5,7 +5,7 @@ import os
 from common.common import *
 from common import spotify_helper
 from server.exceptions import *
-from server import app
+from server import app, song_helper
 
 
 class UserLibrary:
@@ -22,6 +22,10 @@ class UserLibrary:
         self.created_at = datetime.utcnow()
         self.updated_at = None
 
+    @property
+    def is_resolved(self):
+        return self.tracks is not None
+
     @staticmethod
     def upgrade_user(user):
         pass
@@ -36,7 +40,7 @@ class UserLibrary:
         library = pickle.load(file)
         UserLibrary.upgrade_user(library)
         if library._version != UserLibrary.version:
-            raise LibraryRecordVersionMismatch(library._version, UserLibrary.version)
+            raise LibraryRecordVersionMismatchException(library._version, UserLibrary.version)
         library.is_new = False
         return library
 
@@ -47,10 +51,11 @@ class UserTrackSourceType(Enum):
     playlist = 3
 
 
-ignored_playlists_re = [re.compile(r) for r in (['\*Sleep App', 'sleep.+', 'wake.+'])]
+max_playlist_tracks = 1000
+_ignored_playlists_re = [re.compile(r) for r in (['\*Sleep App', 'sleep.+', 'wake.+'])]
 
 
-def extract_user_track(track, added_at, package_id, source):
+def _extract_user_track(track, added_at, package_id, source):
     return {'spotify_id': track['uri'], 'song_id': None, 'package_id': package_id, 'source': source,
             'popularity': track['popularity'] or 0, 'artist_sp_ids': [artist['uri'] for artist in track['artists']],
             'artist_id': None, 'added_at': added_at, 'user_preference': 0, 'playlists': []}
@@ -66,8 +71,8 @@ def build_user_library(user, library):
     for item in library_tracks:
         track = item['track']
         if track['id'] not in extracted_tracks:
-            extracted_tracks[track['id']] = extract_user_track(track, parse_iso8601date(item['added_at']),
-                                                                track['album']['uri'], UserTrackSourceType.library)
+            extracted_tracks[track['id']] = _extract_user_track(track, parse_iso8601date(item['added_at']),
+                                                                track['album']['uri'], UserTrackSourceType.library.value)
 
     # get followed artists
     followed_artists = spotify_helper.get_user_followed_artists(user)
@@ -80,7 +85,7 @@ def build_user_library(user, library):
     extracted_pl_tracks = {}
     playlists = [p for p in spotify_helper.get_playlists_for_user(user, user.spotify_id)
                  if p['owner']['id'] == user.spotify_id and not any([rx.match(p['name'])
-                                                                     for rx in ignored_playlists_re])]
+                                                                     for rx in _ignored_playlists_re])]
     for playlist in playlists:
         # check only the new or playlists with changed count (store in extracted playlists)
         pl_id = playlist['id']
@@ -94,8 +99,8 @@ def build_user_library(user, library):
                 added_at = parse_iso8601date(item['added_at'])
                 newest_added_at = max(newest_added_at, added_at)
                 if track_id not in extracted_pl_tracks:
-                    extracted_pl_tracks[track_id] = extract_user_track(track, added_at,
-                                                                track['album']['uri'], UserTrackSourceType.playlist)
+                    extracted_pl_tracks[track_id] = _extract_user_track(track, added_at,
+                                                                        track['album']['uri'], UserTrackSourceType.playlist.value)
                 else:
                     # always keep newest timestamp
                     extracted_pl_tracks[track_id]['added_at'] = max(added_at, extracted_pl_tracks[track_id]['added_at'])
@@ -109,12 +114,13 @@ def build_user_library(user, library):
                 library.playlists[pl_id]['last_modified'] = newest_added_at
                 library.playlists[pl_id]['snapshot_id'] = playlist['snapshot_id']
 
-    # add max 1000 newest tracks
+    # add max max_playlist_tracks newest tracks
     added_pl_tracks = 0
     for track_id, track in sorted(extracted_pl_tracks.items(), key=lambda x: x[1]['added_at'], reverse=True):
-        if track_id not in extracted_tracks and added_pl_tracks < 1000:
-            extracted_tracks[track_id] = track
-            added_pl_tracks += 1
+        if track_id not in extracted_tracks:
+            if added_pl_tracks < max_playlist_tracks:
+                extracted_tracks[track_id] = track
+                added_pl_tracks += 1
         else:
             extracted_tracks[track_id]['playlists'].extend(track['playlists'])
             extracted_tracks[track_id]['added_at'] = max(extracted_tracks[track_id]['added_at'], track['added_at'])
@@ -124,9 +130,10 @@ def build_user_library(user, library):
             if r_track_id not in extracted_tracks:
                 # this may be deleted library track or playlist track that was not modified so was not read again
                 preserved_playlists = [pl_id for pl_id in r_track['playlists'] if pl_id in library.playlists]
-                if len(preserved_playlists) > 0 and added_pl_tracks < 100:
+                if len(preserved_playlists) > 0 and added_pl_tracks < max_playlist_tracks:
+                    extracted_tracks[r_track_id] = r_track
                     r_track['playlists'] = preserved_playlists
-                    r_track['source'] = UserTrackSourceType.playlist
+                    r_track['source'] = UserTrackSourceType.playlist.value
                     added_pl_tracks += 1
             else:
                 # preserve: added_at (newest), playlists, song_id, artist_id
@@ -148,6 +155,8 @@ def build_user_library(user, library):
     def update_from_top(term_type, score):
         top_tracks = spotify_helper.get_user_top_tracks(user, term_type)
         for track in top_tracks:
+            # todo: add tracks from artists you follow
+            # todo: add tracks when library is very small
             if track['id'] in extracted_tracks:
                 extracted_tracks[track['id']]['user_preference'] += score # 0.5 for short term
     update_from_top('short_term', 0.5)
@@ -155,9 +164,43 @@ def build_user_library(user, library):
 
     # store as unresolved
     library.unresolved_tracks = extracted_tracks
-    library.uresolved_artists = extracted_artists
+    library.unresolved_artists = extracted_artists
 
     return extracted_tracks, extracted_artists
+
+
+def resolve_user_library(library, genres_name):
+    # resolve tracks without song_id (we not were able to import them from previously solved)
+    tracks_no_song_id = [t for t in library.unresolved_tracks.values() if t['song_id'] is None]
+    track_mappings = [(t['spotify_id'], t['artist_sp_ids'][0]) for t in tracks_no_song_id]
+    songs, found_songs, not_found_songs, new_artists = song_helper.transfer_songs_with_retry(
+        track_mappings,
+        genres_name,
+        song_type=0)
+    # index songs
+    indexed_songs = {}
+    for song in songs:
+        indexed_songs[song.SongId] = song
+    # resolve tracks
+    for track in tracks_no_song_id:
+        if track['spotify_id'] in found_songs:
+            song_id = found_songs[track['spotify_id']]
+            track['song_id'] = song_id
+            track['artist_id'] = indexed_songs[song_id].ArtistId
+    library.tracks = library.unresolved_tracks
+    library.unresolved_tracks = None
+    # resolve artists
+    artists_no_artist_id = [a for a in library.unresolved_artists.values() if a['artist_id'] is None]
+    for artist in artists_no_artist_id:
+        db_a, is_new = song_helper.transfer_artist(artist['spotify_id'], genres_name)
+        if db_a is not None:
+            artist['artist_id'] = db_a.ArtistId
+            if is_new:
+                new_artists.append(db_a)
+    library.artists = library.unresolved_artists
+    library.unresolved_artists = None
+
+    return indexed_songs, found_songs, not_found_songs, new_artists
 
 
 def load_library(spotify_id):
@@ -177,7 +220,7 @@ def load_library(spotify_id):
         return library
 
 
-def save_user(library):
+def save_library(library):
     path = app.config['USER_STORAGE_URI'] + library.spotify_id + '.library'
     with open(path, 'bw') as f:
         library.updated_at = datetime.utcnow()
