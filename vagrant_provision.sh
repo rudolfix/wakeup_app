@@ -8,8 +8,12 @@ apt-get -y install git
 apt-get -y install libpcre3 libpcre3-dev
 apt-get -y install libmysqlclient-dev
 apt-get -y install python3-matplotlib
+apt-get -y install rabbitmq-server
+# https://www.rabbitmq.com/man/rabbitmqctl.1.man.html - stopping node
+# sudo rabbitmq-server -detached - start the server
+# logs: /var/log/rabbitmq
 apt-get -y install graphviz libgraphviz-dev pkg-config
-sudo pip3 install pygraphviz --install-option="--include-path=/usr/include/graphviz" --install-option="--library-path=/usr/lib/graphviz/"
+pip3 install pygraphviz --install-option="--include-path=/usr/include/graphviz" --install-option="--library-path=/usr/lib/graphviz/"
 pip3 install -r /vagrant/requirements.txt
 #add development server to localhosts
 echo "0.0.0.0 dev.wakeupapp.com wakeupapp.com" >> /etc/hosts
