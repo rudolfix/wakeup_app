@@ -1,4 +1,5 @@
 from common.config import ConfigBase
+import logging
 
 
 class Config(ConfigBase):
@@ -23,4 +24,6 @@ class Config(ConfigBase):
         'pool_size': 8+2,  # 2 channels for in process consumers
         'pool_recycle': 600
     }
-    # MQ_HOST = 'localhost'
+    # logging
+    LOG_FILE = '/var/log/sleep_server/server.log'
+    LOG_LEVEL = logging.INFO
