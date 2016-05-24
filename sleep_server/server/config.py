@@ -12,3 +12,15 @@ class Config(ConfigBase):
     SQLALCHEMY_DATABASE_URI = 'mysql://dev@localhost/music_graph_dev2'
     DEBUG = True
     USER_STORAGE_URI = '/home/vagrant/user_storage/'
+    FLASK_PIKA_PARAMS = {
+        'host': 'localhost',  # amqp.server.com
+        'username': 'guest',  # convenience param for username
+        'password': 'guest',  # convenience param for password
+        # 'port': 5672,  # amqp server port
+        # 'virtual_host': 'vhost'  # amqp vhost
+    }
+    FLASK_PIKA_POOL_PARAMS = {
+        'pool_size': 8+2,  # 2 channels for in process consumers
+        'pool_recycle': 600
+    }
+    # MQ_HOST = 'localhost'

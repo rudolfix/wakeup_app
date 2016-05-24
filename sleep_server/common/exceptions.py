@@ -17,3 +17,23 @@ class SpotifyApiTokenExpired(ApiException):
 class SpotifyApiObjectNotFoundException(ApiException):
     def __init__(self, code, msg):
         super().__init__(404, 'Spotify object not found [%s] [%s]' % (code, msg))
+
+
+class LibraryNotExistsException(ApiException):
+    def __init__(self, user_id):
+        super().__init__(404, 'Library for user %s does not exists' % user_id)
+
+
+class LibraryNotResolvedException(ApiException):
+    def __init__(self, user_id):
+        super().__init__(428, 'Library for user %s still not resolved' % user_id)
+
+
+class MusicGraphServerException(ApiException):
+    def __init__(self, msg):
+        super().__init__(500, msg)
+
+
+class MusicGraphNetworkException(ApiException):
+    def __init__(self, msg):
+        super().__init__(500, msg)
