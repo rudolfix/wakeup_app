@@ -1,21 +1,19 @@
-import inspect
-import os
 from ordered_set import OrderedSet
-from sqlalchemy import update as sqlupdate, insert as sqlinsert, select as sqlselect
+from sqlalchemy import update as sqlupdate, insert as sqlinsert, select as sqlselect, text as sqltext
 from operator import itemgetter
 import math
 
-
-currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
-parentdir = os.path.dirname(currentdir)
-os.sys.path.insert(0, parentdir)
-from server import db
 from common.common import *
 from common import spotify_helper
+from server import db
 from server.models import Genre, Artist, Song, ArtistGenres, SongTracks, Group, SongGroup, SimilarArtist,\
     GenreSourceType, SimilarGenre, ArtistAdditionalSpotifyIds
 from server.exceptions import *
 from server import echonest_helper
+
+_song_sel_columns = [Song.AS_energy, Song.AS_liveness, Song.AS_tempo, Song.AS_speechiness, Song.AS_acousticness,
+                     Song.AS_instrumentalness, Song.AS_loudness, Song.AS_valence, Song.AS_danceability, Song.AS_key,
+                     Song.AS_mode, Song.AS_time_signature, Song.DurationMs, Song.SongId, Song.GenreId, Song.ArtistId]
 
 
 def db_update_artist(pyen_artist, genres_name, additional_spotify_id=None):
@@ -217,7 +215,7 @@ def db_get_all_artists_genres(genre_source_types=None):
 
 def db_get_genres_for_artists(artist_ids, genre_source_types=None):
     genre_source_types = genre_source_types or [GenreSourceType.echonest.value]
-    s = sqlselect([ArtistGenres.GenreId, ArtistGenres.ArtistId], ArtistGenres.SourceType.in_(genre_source_types) and
+    s = sqlselect([ArtistGenres.GenreId, ArtistGenres.ArtistId], ArtistGenres.SourceType.in_(genre_source_types) &
                   ArtistGenres.ArtistId.in_(artist_ids))\
         .order_by(ArtistGenres.ArtistId).order_by(ArtistGenres.Ord)
     rows = db.session.execute(s).fetchall()
@@ -246,8 +244,7 @@ def db_update_artist_genres(artist_id, genres, source_type, update_songs=True):
         db.session.execute(sqlinsert(ArtistGenres), ins_v)
     # update all artists song if necessary
     if update_songs and len(genres) > 0:
-        stmt = sqlupdate(Song).where(Song.ArtistId == artist_id)\
-            .values(GenreId=genres[0][0])
+        stmt = sqlupdate(Song).where(Song.ArtistId == artist_id).values(GenreId=genres[0][0])
         db.session.execute(stmt)
 
 
@@ -259,6 +256,35 @@ def db_update_similar_genres(genre_id, similar_genres):
         ins_v.append({'GenreId': genre_id, 'SimilarGenreId': gid, 'Similarity': sim})
     if len(ins_v) > 0:
         db.session.execute(sqlinsert(SimilarGenre), ins_v)
+
+
+def db_get_artists_name(artist_id):
+    s = sqlselect([Artist.Name], Artist.ArtistId == artist_id)
+    row = db.session.execute(s).fetchone()
+    return row[0]
+
+
+def db_make_song_selector_from_list(song_ids):
+    return sqlselect(_song_sel_columns, Song.SongId.in_(song_ids))
+
+
+def db_make_song_selector_for_genre(genre_id, max_duration_ms, limit, genre_source_types=None):
+    # todo: write this SQL in alchemy (which is ridiculous)
+    gst = genre_source_types or ['1', '2'] #  GenreSourceType.echonest.value, GenreSourceType.infered.value
+    song_in_genre_q = " Songs.DurationMs < %i AND EXISTS (SELECT 1 FROM Artists a JOIN ArtistGenres ag ON a.ArtistId "\
+                  "= ag.ArtistId WHERE a.ArtistId = Songs.ArtistId AND ag.GenreId = %i AND ag.SourceType IN (%s) )"
+    return sqlselect(_song_sel_columns)\
+        .where(sqltext(song_in_genre_q % (max_duration_ms, genre_id, ','.join(gst))))\
+        .order_by(Song.Hotness).limit(limit)
+
+
+def db_make_song_selector_top_songs():
+    return sqlselect(_song_sel_columns, Song.IsToplistSong == 1)
+
+
+def db_select_song_rows(selector):
+    # selector is just an SQL string
+    return db.session.execute(selector).fetchall()
 
 
 def transfer_songs(track_mappings, genres_name, song_type=None, force_update=False, chunk_size=100):
@@ -399,6 +425,22 @@ def infer_and_store_genres_for_artist(artist_id, similar_ids, artists_genres):
     # write infered genres
     db_update_artist_genres(artist_id, infered_genres, GenreSourceType.infered.value, update_songs=True)
     db.session.commit()
+    return infered_genres
+
+
+def infer_and_store_genres_for_artists(user, db_artists, genres_name):
+    new_genres = {}
+    for db_a in db_artists:
+        # infer genres if not present in new artist
+        if not db_a.Genres:
+            similar_ids = transfer_similar_artists(user, db_a, genres_name)
+            # infer genres
+            if similar_ids:
+                artists_genres = db_get_genres_for_artists(similar_ids)
+                infered_genres = infer_and_store_genres_for_artist(db_a.ArtistId, similar_ids, artists_genres)
+                if infered_genres:
+                    new_genres[db_a.ArtistId] = infered_genres
+    return new_genres
 
 
 def update_genres_from_echonest():
@@ -415,6 +457,16 @@ def update_genres_from_echonest():
             new_genres += 1
     db.session.commit()
     return new_genres
+
+
+def prepare_playable_tracks(user, song_ids):
+    possible_tracks = db_get_spotify_track_ids_for_songs(song_ids).items()
+    ordered_mappings = []
+    for song_id in song_ids:
+        # add mappings in order found in song_ids list
+        ordered_mappings.extend([mapping for mapping in possible_tracks if mapping[1] == song_id])
+    # go through spotify and return only playable tracks
+    return spotify_helper.resolve_tracks_for_user(user, ordered_mappings)
 
 
 def normalized_song_dedup_name(artist_id, song_name):
