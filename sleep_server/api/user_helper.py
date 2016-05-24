@@ -9,12 +9,12 @@ from datetime import datetime
 from api import app
 from api.exceptions import *
 from api.user import User
-from common import spotify_helper
+from common import spotify_helper, common, music_graph_client as mgc
 from common.exceptions import *
 
 
-possible_list_types = ['wake_up', 'fall_asleep']
-predefined_playlists = {'wake_up': '*Sleep App - Wake Up*', 'fall_asleep': '*Sleep App - Fall Asleep*'}
+def _create_playlist_item(playlist_type, uri, actual_length, desired_length):
+    return {'type': playlist_type, 'uri': uri, 'length': actual_length, 'desired_length': desired_length}
 
 
 def create_user(token_data):
@@ -30,6 +30,10 @@ def create_user(token_data):
     user.spotify_token_expiration = token_data['expires_in']
     user.spotify_access_token = token_data['access_token']
     user.spotify_refresh_token = token_data['refresh_token']
+    # add empty playlist items with default settings so they will be created when library is resolved
+    if len(user.playlists) == 0:
+        for pl_type in common.possible_list_types:
+            user.playlists.append(_create_playlist_item(pl_type, None, None, app.config['DEFAULT_PLAYLIST_LENGTH']))
     save_user(user)
 
     return user
@@ -71,32 +75,36 @@ def load_user(spotify_id):
         return user
 
 
-def create_user_playlist(user, playlist_type, desired_length):
+def create_user_playlist(user, playlist_type, desired_length, playlist_id=None):
     # create or update spotify playlist form list of playlists on Sarnecka's Spotify account
-    source_playlist = spotify_helper.get_playlist_tracks_for_user(user, '1130122659',
-                                                           '1v1Do2ukgKZ64wCuOrBnug' if playlist_type == 'wake_up' else
-                                                           '4rk4vb5hjM2jC5HFaOKRAL')
+    # source_playlist = spotify_helper.get_playlist_tracks_for_user(user, '1130122659',
+    #                                                        '1v1Do2ukgKZ64wCuOrBnug' if playlist_type == 'wake_up' else
+    #                                                        '4rk4vb5hjM2jC5HFaOKRAL')
     # desired length in milliseconds
     if desired_length == 0:
         source_playlist = []
         actual_length = 0
     else:
+        lib_playlist = mgc.create_playlist(user, playlist_type, desired_length, playlist_id)[playlist_type]
+        source_playlist = lib_playlist['tracks']
+        actual_length = lib_playlist['duration_ms']
         # remove randomly until list fits the desired time
-        pl_len = lambda pl: reduce(lambda x, y: x + y['track']['duration_ms'], pl, 0)
-        actual_length = pl_len(source_playlist)
-        while len(source_playlist) > 2:  # first and last songs are always here
-            rem_idx = random.randrange(1, len(source_playlist) - 1)
-            rem_item = source_playlist[rem_idx]
-            if math.fabs(actual_length-rem_item['track']['duration_ms']-desired_length) > \
-                    math.fabs(actual_length-desired_length):
-                break
-            source_playlist.remove(rem_item)
-            actual_length = pl_len(source_playlist)
+        # pl_len = lambda pl: reduce(lambda x, y: x + y['track']['duration_ms'], pl, 0)
+        # actual_length = pl_len(source_playlist)
+        # while len(source_playlist) > 2:  # first and last songs are always here
+        #     rem_idx = random.randrange(1, len(source_playlist) - 1)
+        #     rem_item = source_playlist[rem_idx]
+        #     if math.fabs(actual_length-rem_item['track']['duration_ms']-desired_length) > \
+        #             math.fabs(actual_length-desired_length):
+        #         break
+        #     source_playlist.remove(rem_item)
+        #     actual_length = pl_len(source_playlist)
     # create/update spotify playlist
-    sp_user_pl = spotify_helper.get_or_create_playlist_by_name(user, predefined_playlists[playlist_type])
-    spotify_helper.set_playlist_content(user, sp_user_pl['id'], [item['track']['uri'] for item in source_playlist])
+    sp_user_pl = spotify_helper.get_or_create_playlist_by_name(user, common.predefined_playlists[playlist_type])
+    # [item['track']['uri'] for item in source_playlist]
+    spotify_helper.set_playlist_content(user, sp_user_pl['id'], source_playlist)
     # save user records
-    user_pl_meta = {'type': playlist_type, 'uri': sp_user_pl['uri'], 'length': actual_length}
+    user_pl_meta = _create_playlist_item(playlist_type, sp_user_pl['uri'], actual_length, desired_length)
     existing_user_pl_meta = [pl for pl in user.playlists if pl['type'] == playlist_type]
     if len(existing_user_pl_meta) == 1:
         user.playlists.remove(existing_user_pl_meta[0])
@@ -105,22 +113,21 @@ def create_user_playlist(user, playlist_type, desired_length):
 
 
 def gather_music_data(user):
-    # currently just create default playlists
-    for playlist_type in possible_list_types:
-        create_user_playlist(user, playlist_type, 30 * 60 * 1000)
-    save_user(user)
+    mgc.resolve_library(user)
 
 
 def check_user_playlists_generation_status(user):
-    if not user.is_playlists_ready:
-        # mockup playlist wait time max 2 mins, min 15 sec
-        min_gen = app.config['MOCKUP_MIN_PLAYLIST_GEN_SEC']
-        max_gen = app.config['MOCKUP_MAX_PLAYLIST_GEN_SEC']
-        if (datetime.utcnow() - user.created_at).seconds < random.randrange(min_gen, max_gen):
-            raise PlaylistsDataNotReadyException()
-        else:
-            user.is_playlists_ready = True
-            save_user(user)
+    lib_status = mgc.get_library(user)
+    return lib_status['is_resolved']
+    # if not user.is_playlists_ready:
+    #     # mockup playlist wait time max 2 mins, min 15 sec
+    #     min_gen = app.config['MOCKUP_MIN_PLAYLIST_GEN_SEC']
+    #     max_gen = app.config['MOCKUP_MAX_PLAYLIST_GEN_SEC']
+    #     if (datetime.utcnow() - user.created_at).seconds < random.randrange(min_gen, max_gen):
+    #         raise PlaylistsDataNotReadyException()
+    #     else:
+    #         user.is_playlists_ready = True
+    #         save_user(user)
 
 
 def save_user(user):
