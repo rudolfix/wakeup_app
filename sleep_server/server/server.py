@@ -115,11 +115,13 @@ def create_playlist(user, user_id, playlist_type, playlist_id=None):
 
 @app.errorhandler(ApiException)
 def handle_api_error(e):
+    app.logger.exception(e)
     return json.jsonify(_make_error_dict(e, e.status_code)), e.status_code
 
 
 @app.errorhandler(Exception)
 def handle_error(e):
+    app.logger.exception(e)
     return json.jsonify(_make_error_dict(e, 500)), 500
 
 
@@ -128,6 +130,15 @@ def _make_error_dict(e, status_code):
 
 
 def init_logging():
+    handler = RotatingFileHandler(app.config['LOG_FILE'], maxBytes=100000, backupCount=10)
+    formatter = logging.Formatter('%(asctime)s | %(filename)s:%(lineno)d | %(funcName)s | %(levelname)s | %(message)s ')
+    handler.setFormatter(formatter)
+    handler.setLevel(app.config['LOG_LEVEL'])
+    app.logger.addHandler(handler)
+    app.logger.setLevel(app.config['LOG_LEVEL'])
+    log = logging.getLogger('werkzeug')
+    log.setLevel(app.config['LOG_LEVEL'])
+    log.addHandler(handler)
     pass
 
 
@@ -136,11 +147,14 @@ def start():
     spotify_helper.return_None_on_not_found = True
     echonest_helper.return_None_on_not_found = True
 
+    app.logger.info('Server runtime starting')
     music_graph_helper.G = cache.global_from_cache()
+    app.logger.info('MQ starting')
     mq.start()
 
 
 def stop():
+    app.logger.info('Server runtime stopping')
     mq.stop()
 
 
