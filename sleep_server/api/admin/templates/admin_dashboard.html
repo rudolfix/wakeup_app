@@ -24,14 +24,14 @@
         {% endif %}
         <br/>
         library created {{ lib_status['created_ago'] }} days ago ({{ lib_status['created_at'] }})
-        library resolved {{ lib_status['updated_ago'] }} days ago ({{ lib_status['updated_at'] }})
+        library resolved {{ lib_status['resolved_ago'] }} days ago ({{ lib_status['resolved_at'] }})
         {% if lib_status['is_resolved'] %}
             <h3>Fall asleep playlists</h3>
             Current playlist <b>{{ user_playlists['fall_asleep']['name'] }}</b>
             {% if user_playlists['fall_asleep']['uri'] %} <span class="green">created</span> length {{ user_playlists['fall_asleep']['length'] / (60 * 1000) }}
             {% else %} <span class="red">not created</span> {% endif %}
             <br/>
-            <input type="number" name="fall_asleep_dl" min="10" max="80" step="1" value="{{ user_playlists['fall_asleep']['desired_length'] / (60 * 1000) }}"/> minutes
+            <input type="number" name="fall_asleep_dl" min="10" max="80" step="1" value="{{ (user_playlists['fall_asleep']['desired_length'] / (60 * 1000))|int }}"/> minutes
             <button name="action" type="submit" value="fall_asleep_auto">CHOOSE AUTOMATICALLY</button> or from the list<br/>
             {% if possible_playlists['fall_asleep'] %}
                 <table>
@@ -43,7 +43,26 @@
                 {% endfor %}
                 </table>
             {% endif %}
+            <h3>Wake up playlists</h3>
+            Current playlist <b>{{ user_playlists['wake_up']['name'] }}</b>
+            {% if user_playlists['wake_up']['uri'] %} <span class="green">created</span> length {{ user_playlists['wake_up']['length'] / (60 * 1000) }}
+            {% else %} <span class="red">not created</span> {% endif %}
+            <br/>
+            <input type="number" name="wake_up_dl" min="10" max="80" step="1" value="{{ (user_playlists['wake_up']['desired_length'] / (60 * 1000))|int }}"/> minutes
+            <button name="action" type="submit" value="wake_up_auto">CHOOSE AUTOMATICALLY</button> or from the list<br/>
+            {% if possible_playlists['wake_up'] %}
+                <table>
+                {% for pl in possible_playlists['wake_up'] %}
+                    <tr>
+                    <td><b>{{ pl['name'] }}</b> cardinality {{ pl['card']*100 }} pref {{ pl['pref'] }}</td>
+                    <td><button name="action" type="submit" value="wake_up:{{ pl['plid'] }}">SET</button></td>
+                    </tr>
+                {% endfor %}
+                </table>
+            {% endif %}
         {% endif %}
+    {% else %}
+        Your library <span class="red">does not exist</span> <button name="action" type="submit" value="resolve">RESOLVE</button>
     {% endif %}
     </form>
     <h3>Internal info</h3>

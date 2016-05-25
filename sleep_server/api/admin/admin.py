@@ -6,6 +6,7 @@ from flask import request, redirect, url_for, make_response, render_template, Bl
 from api import app
 from api import user_helper
 from common import spotify_helper, music_graph_client as mgc, common
+from common.exceptions import LibraryNotExistsException, LibraryNotResolvedException
 
 admin_bp = Blueprint('admin', __name__, template_folder='templates')
 
@@ -70,17 +71,21 @@ def login_completed():
 @check_user
 def dashboard(user):
     # get library status
-    lib_status = mgc.get_library(user)
+    lib_status = None
+    try:
+        lib_status = mgc.get_library(user)
+    except LibraryNotExistsException as nex:
+        pass
     possible_playlists = None
     if lib_status is not None:
         # get age from timestamps
         now = datetime.utcnow()
         lib_status['created_ago'] = (now - lib_status['created_at']).days
-        if lib_status['updated_at'] is not None:
-            lib_status['updated_ago'] = (now - lib_status['updated_at']).days
+        if lib_status['resolved_at'] is not None:
+            lib_status['resolved_ago'] = (now - lib_status['resolved_at']).days
         if lib_status['is_resolved']:
             # get possible playlists
-            possible_playlists = mgc.get_possible_playlists(user, playlist_type='fall_asleep')
+            possible_playlists = mgc.get_possible_playlists(user)
     # make user playlists into dict
     user_playlists = {}
     for pl in user.playlists:
@@ -95,14 +100,23 @@ def dashboard(user):
 @check_user
 def actions(user):
     action = request.values.get('action').split(':')
-    fall_asleep_dl = int(request.values.get('fall_asleep_dl')) * 60 * 1000
     if action[0] == 'resolve':
         mgc.resolve_library(user)
     elif action[0] == 'fall_asleep_auto':
+        fall_asleep_dl = int(request.values.get('fall_asleep_dl')) * 60 * 1000
         user_helper.create_user_playlist(user, 'fall_asleep', fall_asleep_dl)
         user_helper.save_user(user)
     elif action[0] == 'fall_asleep':
+        fall_asleep_dl = int(request.values.get('fall_asleep_dl')) * 60 * 1000
         user_helper.create_user_playlist(user, 'fall_asleep', fall_asleep_dl, int(action[1]))
+        user_helper.save_user(user)
+    elif action[0] == 'wake_up_auto':
+        wake_up_dl = int(request.values.get('wake_up_dl')) * 60 * 1000
+        user_helper.create_user_playlist(user, 'wake_up', wake_up_dl)
+        user_helper.save_user(user)
+    elif action[0] == 'wake_up':
+        wake_up_dl = int(request.values.get('wake_up_dl')) * 60 * 1000
+        user_helper.create_user_playlist(user, 'wake_up', wake_up_dl, int(action[1]))
         user_helper.save_user(user)
 
     return redirect(url_for('admin.dashboard'))
