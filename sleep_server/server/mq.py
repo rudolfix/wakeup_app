@@ -28,8 +28,9 @@ def mq_callback(f):
         except MqMalformedMessageException as mf:
             app.logger.error('queue message malformed, MESSAGE DISCARDED (%s)' % str(mf))
             ch.basic_ack(delivery_tag=method.delivery_tag)
-        except:
-            traceback.print_exc(file=sys.stdout)
+        except Exception as exc:
+            app.logger.error(exc)
+            # traceback.print_exc(file=sys.stdout)
             ch.basic_nack(delivery_tag=method.delivery_tag)
 
     return _wrap
@@ -65,6 +66,9 @@ def _user_lib_updater_callback(ch, method, properties, body):
     start_time = time.time()
     user_id, user = _parse_user_library_mq_msg(body)
     library = user_library.load_library(user_id)
+    # quickly mark as processing
+    library.unresolved_tracks = []
+    user_library.save_library(library)
     user_library.build_user_library(user, library)
     user_library.save_library(library)
     _send_mq_message(_ch_user_lib_resolver, body)  # forward the same body to resolve queue
