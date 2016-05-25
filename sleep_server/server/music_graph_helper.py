@@ -10,6 +10,7 @@ from itertools import islice
 
 from common.common import get_first
 from server import app, song_helper
+from server.exceptions import CacheEntryNotExistsException
 
 _feature_names = ['energy', 'liveness', 'tempo', 'speechiness', 'acousticness', 'instrumentalness', 'loudness',
                   'valence', 'danceability', 'key', 'mode', 'time_signature']
@@ -23,10 +24,12 @@ _f_song_id_i = 13
 _f_duration_id_i = 12
 
 _is_sleep_genre_threshold = 0.47  # genres with that rate of sleepy songs are considered sleepy (sleepy cluster poss.)
-_is_wakeful_genre_threshold = 0.65 # genres with that many wakeful songs may be used as wakeup
+_is_wakeup_genre_threshold = 0.65 # genres with that many wakeful songs may be used as wakeup
 _blocked_sleep_genres = ['modern performance', 'classical christmas']
+_blocked_wakeup_genres = []
 
-_dist_mod_sleep = [3,0.3,1,0.5,1,1,1,5]  # distance modifiers when clustering songs (dimensions get weighted)
+_dist_mod_sleep = [3, 0.3, 1, 0.5, 1, 1, 1, 5]  # distance modifiers when clustering songs (dimensions get weighted)
+_sound_energy_dist = [0, 3, 4, 5]  # distance measure based on energy and soft features: speechiness acousticness etc.
 # _dist_mod_library = [3,0.3,1,0.5,2,2,1,3]
 
 
@@ -66,12 +69,12 @@ def load_user_library_song_features(library):
             indexed_tracks[track['song_id']] = track
     # iterate over song ids taken from db
     idx = 0
-    for song_id in np.nditer(song_features[:, 13]):  # , op_flags=['readwrite']
+    for song_id in np.nditer(song_features[:, _f_song_id_i]):  # , op_flags=['readwrite']
         # add popularity, now - added_at(hours), user_preference, playlists (count)
         track = indexed_tracks[int(song_id)]
         song = song_features[idx]
         song[16] = track['popularity']
-        td = library.updated_at - track['added_at']  # count age from last library update
+        td = library.resolved_at - track['added_at']  # count age from last library update
         song[17] = td.days * 24 + td.seconds / (60 * 60)
         song[18] = track['user_preference']
         song[19] = len(track['playlists'])
@@ -79,6 +82,16 @@ def load_user_library_song_features(library):
         idx += 1
 
     return song_features, indexed_tracks
+
+
+def _first_song_idx_with_genre(song_features, gid):
+    idx = -1
+    for np_artist_id in np.nditer(song_features[:, _f_artist_id_i]):
+        artist_id = int(np_artist_id)
+        idx += 1
+        if artist_id in G.artists_genres and gid in G.artists_genres[artist_id]:
+            return idx
+    return idx
 
 
 def load_song_features(selector):
@@ -99,53 +112,62 @@ def prepare_songs(song_features, scaler=None):
     return song_features, song_genres, scaler
 
 
-def f_val_prc(i, f):
+def _f_val_prc(i, f):
     return (f[i] - G.top_songs_f_min[i]) / (G.top_songs_f_max[i] - G.top_songs_f_min[i])
 
 
-def is_sleep_song(features):
+def _is_sleep_song(features):
     # todo: work on sleep threshold here maybe by training SVM model on very sleepy and energetic songs
-    energy_val = f_val_prc(0, features)
+    energy_val = _f_val_prc(0, features)
     return energy_val < 0.6
 
 
-def is_wakeup_song(features):
-    energy_val = f_val_prc(0, features)
+def _is_wakeup_song(features):
+    energy_val = _f_val_prc(0, features)
     return energy_val > 0.6
 
 
-def sleepines(features):
+def _sleepines(features):
     # low energy(0), tempo(2), valence(7), danceability(8), loudness(6)
     # high acousticness(4)
 
-    return 1 - f_val_prc(0, features) + 1 - f_val_prc(2, features) + 1 - f_val_prc(8, features)
+    return 1 - _f_val_prc(0, features) + 1 - _f_val_prc(2, features) + 1 - _f_val_prc(8, features)
 
 
-def wakefulness(features):
+def _wakefulness(features):
     # low energy(0), tempo(2), valence(7), danceability(8), loudness(6)
     # high acousticness(4)
-    energy = f_val_prc(0, features)
-    danceability = f_val_prc(8, features)
-    valence = f_val_prc(7, features)
+    energy = _f_val_prc(0, features)
+    danceability = _f_val_prc(8, features)
+    valence = _f_val_prc(7, features)
     return max(energy + valence, danceability + valence)
 
 
-def lib_song_preference(lib_song):
+def _lib_song_preference(lib_song, time_score_base, time_score_days_base):
     # get a score for source (library is better), be on playlist, be recently listened to and age where
     # you score 1 point for 1-3 days and they it goes down to zero at 20th day
     # 17 - age, 18 - user_preference, 19 no of playlists, 20 source
-    time_score = 0 if lib_song[17] > 20*24 else 1 if lib_song[17] < 3*24 else lib_song[17] / (20*24)
+    time_score = 0 if lib_song[17] > time_score_days_base*24 else time_score_base \
+        if lib_song[17] < 3*24 else time_score_base*lib_song[17] / (time_score_days_base*24)
     # print('%i: %f' % (lib_song[17], time_score))
     source = lib_song[20]
     source_score = 0.75 if source == 3 else 0.3 if source == 1 else 0
     return time_score + source_score + lib_song[18] + lib_song[19] * 0.2
 
 
-def k_shortest_paths(graph, source, target, k, weight=None):
+def _lib_song_sleep_preference(lib_song):
+    return _lib_song_preference(lib_song, 1, 20)
+
+
+def _lib_song_wake_preference(lib_song):
+    return _lib_song_preference(lib_song, 3, 60)
+
+
+def _k_shortest_paths(graph, source, target, k, weight=None):
     return list(islice(nx.shortest_simple_paths(graph, source, target, weight=weight), k))
 
 
-def edges_path_iter(graph, path, data=None):
+def _edges_path_iter(graph, path, data=None):
     for i in range(len(path) - 1):
         n1 = path[i]
         n2 = path[i + 1]
@@ -155,12 +177,12 @@ def edges_path_iter(graph, path, data=None):
             yield (n1, n2, graph.edge[n1][n2])
 
 
-def find_closest_genre(graph, gid, possible_genres):
+def _find_closest_genre(graph, gid, possible_genres):
     shortest_paths = []
     for possible_gid in possible_genres:
         try:
-            for path in k_shortest_paths(graph, gid, possible_gid, 1, weight='weight'):
-                w = functools.reduce(lambda w, edge: w + edge[2], edges_path_iter(graph, path, data='weight'), 0)
+            for path in _k_shortest_paths(graph, gid, possible_gid, 1, weight='weight'):
+                w = functools.reduce(lambda w, edge: w + edge[2], _edges_path_iter(graph, path, data='weight'), 0)
                 shortest_paths.append((path, w))
         except nx.NetworkXNoPath:
             pass
@@ -170,8 +192,13 @@ def find_closest_genre(graph, gid, possible_genres):
     return sorted(shortest_paths, key=itemgetter(1))[0][0][-1]
 
 
-# finds closest vector to ref_song among songs using feature indexes 'distance_features', euclidean distance
+def _euclidean_dist(ref_song, song):
+    return math.sqrt(functools.reduce(
+        lambda y, x: y + (x[0] - x[1]) ** 2, zip(ref_song, song), 0))
+
+
 def find_closest_song(ref_song, songs, distance_features, randlimit=5):
+    # finds closest vector to ref_song among songs using feature indexes 'distance_features', euclidean distance
     def ec_dist(song):
         return math.sqrt(functools.reduce(
             lambda y, x: y + (x[0] - x[1]) ** 2, zip(ref_song[distance_features], song[distance_features]), 0))
@@ -181,29 +208,33 @@ def find_closest_song(ref_song, songs, distance_features, randlimit=5):
     return min_dis_idx
 
 
-def fing_closest_genre_by_acoustics(ref_genre, genre_features, distance_features):
-    return find_closest_song(ref_genre, genre_features, distance_features)
+def _find_closest_genre_by_acoustics(ref_genre, genre_features, distance_features):
+    return find_closest_song(ref_genre, genre_features, distance_features, 1)
 
 
-def print_features(f_vec):
+def _print_features(f_vec):
     for i in range(min(len(_feature_names), len(f_vec))):
-        print('%s: %i%% (%f)' % (_feature_names[i], f_val_prc(i, f_vec) * 100.0, f_vec[i]))
+        print('%s: %i%% (%f)' % (_feature_names[i], _f_val_prc(i, f_vec) * 100.0, f_vec[i]))
 
 
-def top_songs_with_affinity(song_features, limit, f_affinity):
+def _top_songs_with_affinity(song_features, limit, f_affinity, f_affinity_treshold=None):
     acoustic_features = song_features[:, :_f_acoustic_i]
-    # is_aff_songs = np.apply_along_axis(f_affinity_treshold, 1, acoustic_features)
-    # songs_with_affinity = acoustic_features[is_aff_songs]
-    # print(songs_with_affinity.shape)
-    features_affinity = np.zeros(len(acoustic_features), dtype=np.float32)
-    for s_id, f in enumerate(acoustic_features):
+    if f_affinity_treshold:
+        is_aff_songs = np.apply_along_axis(f_affinity_treshold, 1, acoustic_features)
+        songs_with_affinity = acoustic_features[is_aff_songs]
+        # print(songs_with_affinity.shape)
+    else:
+        songs_with_affinity = acoustic_features
+    features_affinity = np.zeros(len(songs_with_affinity), dtype=np.float32)
+    for s_id, f in enumerate(songs_with_affinity):
         features_affinity[s_id] = f_affinity(f)
     features_affinity_sorted_idx = np.argsort(features_affinity)
     features_affinity_sorted_idx_rev = features_affinity_sorted_idx[::-1]
     return features_affinity_sorted_idx_rev[:limit]
 
 
-def _compute_genres_for_songs(lib_song_features, followed_artists, genres_affinity, affinity_threshold,
+def _compute_genres_for_songs(lib_song_features, followed_artists, genres_affinity, f_lib_song_preference,
+                              affinity_threshold,
                               genre_prevalence_threshold=0.02, genre_prevalence_count_threshold=10000):
     # artists_ids = lib_song_features[:, _f_artist_id_i]
     genres_accu = []
@@ -211,7 +242,7 @@ def _compute_genres_for_songs(lib_song_features, followed_artists, genres_affini
     for idx in range(lib_song_features.shape[0]):
         aid = lib_song_features[idx, _f_artist_id_i]
         # sid = lib_song_features[idx, _f_song_id_i]
-        pref = lib_song_preference(lib_song_features[idx])
+        pref = f_lib_song_preference(lib_song_features[idx])
         if aid in followed_artists:
             pref += 0.25
         if aid in G.artists_genres:
@@ -224,8 +255,8 @@ def _compute_genres_for_songs(lib_song_features, followed_artists, genres_affini
                     genres_pref[gid] = pref
     genres_count = np.bincount(genres_accu)
 
-    # lambda f: (sleepines(f)-min_sleepiness)/(max_sleepiness-min_sleepiness)
-    # genre_sleepiness = np.apply_along_axis(sleepines, 1, genre_features)
+    # lambda f: (_sleepines(f)-min_sleepiness)/(max_sleepiness-min_sleepiness)
+    # genre_sleepiness = np.apply_along_axis(_sleepines, 1, genre_features)
     # genres_count_weighted = np.multiply(genres_count,genre_sleepiness[:len(genres_count)])
     tot_in_sleep = sum(genres_count[genres_affinity[:len(genres_count)] > affinity_threshold])
     # print(tot_in_sleep)
@@ -265,7 +296,7 @@ def trim_song_slice_length(track_mappings, song_features, desired_length):
     # trims songs from the right
     tracks = []
     c_len = 0
-    for song_id, track_id in track_mappings:
+    for track_id, song_id in track_mappings:
         song = get_first(song_features, lambda s: s[_f_song_id_i] == song_id)
         c_len += song[_f_duration_id_i]
         tracks.append(track_id)
@@ -274,22 +305,234 @@ def trim_song_slice_length(track_mappings, song_features, desired_length):
     return tracks, c_len
 
 
+def trim_song_slice_length_by_acoustics(track_mappings, song_features, desired_length, distance_features):
+    # trims songs by computing acoustic difference and finding most similar pairs x - o - x
+    c_len = 0
+    # get features of mapped tracks
+    mapped_song_features = []
+    mapped_song_adiffs = []
+    # could not find anything better than this, maybe apply_along_axis..
+    for track_id, song_id in track_mappings:
+        song = get_first(song_features, lambda s: s[_f_song_id_i] == song_id)
+        c_len += song[_f_duration_id_i]
+        mapped_song_features.append(song)
+    # create distances
+    for idx in range(len(mapped_song_features)-2):
+        song = mapped_song_features[idx]
+        ref_song = mapped_song_features[idx+2]
+        mapped_song_adiffs.append(_euclidean_dist(ref_song[distance_features], song[distance_features]))
+    # print('dists %s len %i' % (mapped_song_adiffs, len(mapped_song_adiffs)))
+
+    while True:
+        # remove songs between closest neighbours, +1 to find middle element
+        rem_idx = min(range(len(mapped_song_adiffs)), key=mapped_song_adiffs.__getitem__) + 1
+        rem_len = mapped_song_features[rem_idx][_f_duration_id_i]
+        if c_len - rem_len < desired_length:
+            break;  # stay above desired_length
+        c_len -= rem_len
+        # del removed song
+        del mapped_song_features[rem_idx]
+        del track_mappings[rem_idx]
+        # del from distances
+        if rem_idx < len(mapped_song_adiffs):
+            del mapped_song_adiffs[rem_idx]
+            # update distances
+            song = mapped_song_features[rem_idx-1]
+            ref_song = mapped_song_features[rem_idx+1]
+            mapped_song_adiffs[rem_idx-1] = _euclidean_dist(ref_song[distance_features], song[distance_features])
+        else:
+            del mapped_song_adiffs[rem_idx-1]
+        # print('dists %s len %i' % (mapped_song_adiffs, len(mapped_song_adiffs)))
+
+    return [t[0] for t in track_mappings], int(c_len)
+
+
 def compute_sleep_genres(library_features, followed_artists, check_songs=100):
-    most_n_indexer = top_songs_with_affinity(library_features, check_songs, sleepines)
+    most_n_indexer = _top_songs_with_affinity(library_features, check_songs, _sleepines)
     most_song_features = library_features[most_n_indexer]
     # print(gr_song_features.shape)
     # most_song_genres = library_genres[most_n_indexer]
     # most_features = most_song_features[:, _clustered_features]
     # most_printable_features = most_song_features[:, :_f_acoustic_i]
     genres = _compute_genres_for_songs(most_song_features, followed_artists, G.genre_sleepiness,
-                                       _is_sleep_genre_threshold)
-    return [g for g in genres if G.genres[g[0]] not in _blocked_sleep_genres]
+                                       _lib_song_sleep_preference, _is_sleep_genre_threshold)
+    return [g for g in genres if G.genres[g[0]] not in _blocked_sleep_genres], most_song_features
+
+
+def compute_wakeup_genres(library_features, followed_artists, check_songs=100):
+    most_n_indexer = _top_songs_with_affinity(library_features, check_songs, _wakefulness)
+    most_song_features = library_features[most_n_indexer]
+    genres = _compute_genres_for_songs(most_song_features, followed_artists, G.genre_wakefulness,
+                                       _lib_song_wake_preference, _is_wakeup_genre_threshold)
+    return [g for g in genres if G.genres[g[0]] not in _blocked_wakeup_genres], most_song_features
+
+
+def compute_popular_genres(library_features, followed_artists):
+    # gent genre for all possible songs, genres affinity is disregarded due to 0 for affinity_threshold
+    gpt = min(10/library_features.shape[0], 0.01)
+    genres = _compute_genres_for_songs(library_features, followed_artists, G.genre_sleepiness,
+                                       _lib_song_sleep_preference, affinity_threshold=0, genre_prevalence_threshold=gpt,
+                                       genre_prevalence_count_threshold=10)
+    return genres, library_features
+
+
+def best_song_idx_with_genre(song_features, gid, min_duration_ms, max_duration_ms, f_affinity_threshold, randlimit):
+    def best_dist(song):
+        artist_id = int(song[_f_artist_id_i])
+        duration_ms = int(song[_f_duration_id_i])
+        if artist_id in G.artists_genres and gid in G.artists_genres[artist_id] and f_affinity_threshold(song) \
+                and max_duration_ms > duration_ms > min_duration_ms:
+            return _lib_song_wake_preference(song)
+        else:
+            return -1
+
+    # for x in np.nditer(a, flags=['external_loop'], order='F'): but you need to transpose a
+    distances = np.apply_along_axis(best_dist, 1, song_features)
+    # print('best_idx choose among %i' % len(distances[distances>-1]))
+    if np.all(distances == -1):
+        return _first_song_idx_with_genre(song_features, gid)
+    else:
+        # get only != -1
+        sorted_idxs = np.argsort(distances)
+        sorted_idxs = sorted_idxs[distances[sorted_idxs] > -1][::-1][:randlimit]
+        r_idx = random.randint(0, min(randlimit - 1, len(distances) - 1))
+        # print('choose from %s idx %i' % (sorted_idxs, r_idx))
+        return sorted_idxs[r_idx]
+
+
+def find_closest_nodes_subgraph(graph, source, targets):
+    distances = []
+    min_len = nx.number_of_nodes(graph) + 1
+    for t in targets:
+        try:
+            l = len(nx.dijkstra_path(graph, source, t, weight='weight'))
+        except nx.NetworkXNoPath:
+            l = nx.number_of_nodes(graph) + 1
+        if l < min_len:
+            min_len = l
+        distances.append((t, l))
+
+    return [l for l in distances if l[1] == min_len]
+
+
+def generate_wakeup_playlist(wake_gid, lib_wake_song_features, gr_song_features, top_sleep_genres, top_genres,
+                             desired_length, max_song_duration_ms=10*60*1000):
+    wake_song_features = lib_wake_song_features[:, :_f_lib_feats_i]
+    # find #start genre song and then #end genre with speechiness, acousticness and instru as close as possible
+    # morph energy, temp, dance, valence linearly
+    # wake_song_features has wakeful songs filtered for current user
+    # find the most wakeful song of given gid
+    init_song_idx = best_song_idx_with_genre(lib_wake_song_features, wake_gid, 2 * 60 * 1000, max_song_duration_ms,
+                                             _is_wakeup_song, 5)
+    init_song = wake_song_features[init_song_idx]
+    # find matchin end genre from sleep genres by speechiness, acousticness and instru
+    sound_similarity = [3, 4, 5]
+    energy_similarity = [0, 2, 8]
+    possible_sleep_genres = [g[0] for g in top_sleep_genres]
+    # genre similarity via graph works much better
+    end_gid = random.choice(find_closest_nodes_subgraph(G.G_genre_sim, wake_gid, possible_sleep_genres))[0]
+    # print('start genre %s' % G.genres[wake_gid])
+    # print('end genre %s' % G.genres[end_gid])
+    sleepy_clusters = init_extract_genre_clusters(end_gid, _dist_mod_sleep, _sleepines, _is_sleep_song)
+    end_songs = np.vstack(c[2] for c in sleepy_clusters)
+    end_song_idx = find_closest_song(init_song, end_songs, sound_similarity, 1)
+    end_song = end_songs[end_song_idx]
+    # use genre similarity graph to connect wake_gid to end_gid
+    genre_path = []
+    try:
+        for path in _k_shortest_paths(G.G_genre_sim, wake_gid, end_gid, 1, weight='weight'):
+            genre_path = path
+            # print(path)
+    except nx.NetworkXNoPath:
+        raise  # todo: handle NetworkXNoPath somehow
+
+    # part of replace_closest_gid closure
+    possible_genres = [g[0] for g in top_genres]
+
+    def replace_closest_gid(gid):
+        # print(possible_genres)
+        if gid not in possible_genres:
+            c_gid = _find_closest_genre(G.G_genre_sim, gid, possible_genres)
+            if c_gid is not None:
+                # print('----------replaced with %s(%i)' % (G.genres[c_gid], c_gid))
+                return c_gid
+
+        return gid
+
+    rem_length = int(desired_length - init_song[_f_duration_id_i] - end_song[_f_duration_id_i])
+    # get average len
+    avg_song_len = int(np.mean(G.genre_features[np.asarray(genre_path, dtype=np.int32)][:, _f_duration_id_i]))
+    # get number of steps
+    expected_steps = round(rem_length / avg_song_len)
+    # morph song into end song in expected_steps + 1 steps (+1 -> we need to finish one step before end_song)
+    song_diff = (end_song - init_song) / (expected_steps + 1)
+    # var below will be morphed during iteration
+    song_iter = np.copy(init_song)
+    wakeup_playlist = [init_song]
+    path_step = len(genre_path) / expected_steps
+    # print('expected: %i path_step %f genres %i' % (expected_steps, path_step, len(genre_path)))
+    for i in range(expected_steps):
+        song_iter += song_diff
+        path_idx = int(path_step * i + path_step/2)
+        gid = genre_path[path_idx]
+        # print('processing %s' % mgh.G.genres[gid])
+        # choose afinity func
+        if i <= expected_steps // 3:
+            # f_affinity = _wakefulness
+            # f_has_affinity = _is_wakeup_song
+            cluster_type = 'wakeup'
+            dist_index = energy_similarity
+            gid = replace_closest_gid(gid)
+            # c_songs = gr_song_features[gr_song_genres==gid]
+            # clusters = extract_sleepy_clusters(gid, dist_mod_sleep, f_affinity, f_has_affinity, show_clusters=False)
+            # c_songs = np.vstack(c[2] for c in clusters)
+            # print(len(c_songs))
+        elif i <= 2*expected_steps // 3:
+            # f_affinity = lambda x: 1  # identity
+            # f_has_affinity = lambda x: True
+            cluster_type = 'pop'
+            dist_index = energy_similarity
+            gid = replace_closest_gid(gid)
+            # c_songs = gr_song_features[gr_song_genres==gid]
+            # clusters = extract_sleepy_clusters(gid, dist_mod_sleep, f_affinity, f_has_affinity, show_clusters=False)
+            # c_songs = np.vstack(c[2] for c in clusters)
+            # print(len(c_songs))
+        else:
+            # f_affinity = _sleepines
+            # f_has_affinity = _is_sleep_song
+            cluster_type = 'sleep'
+            dist_index = _sound_energy_dist
+            # find any song from cluster
+            # clusters = extract_sleepy_clusters(gid, dist_mod_sleep, f_affinity, f_has_affinity, show_clusters=False)
+            # c_songs = np.vstack(c[2] for c in clusters)
+
+        # clusters = init_extract_genre_clusters(gid, _dist_mod_sleep, f_affinity, f_has_affinity)
+        import cache
+        try:
+            clusters = cache.get_genre_clusters(cluster_type, gid)
+        except CacheEntryNotExistsException:
+            clusters = cache.get_genre_clusters('pop', gid)
+        c_songs = np.vstack(c[2] for c in clusters)
+        # print(len(c_songs))
+        # todo: search many closest songs and order by user preferences then choose -> known songs will pop in!
+        c_song_idx = find_closest_song(song_iter, c_songs, dist_index)
+        # print('%i from %s ----by %s' % (int(c_songs[c_song_idx][15]),
+        #                                 f_affinity.__name__,
+        #                                 song_helper.db_get_artists_name(c_songs[c_song_idx][15])))
+        wakeup_playlist.append(c_songs[c_song_idx])
+    wakeup_playlist.append(end_song)
+
+    return wakeup_playlist[::-1]
 
 
 def init_extract_genre_clusters(genre_id, dist_mod, f_affinity, f_has_affinity, max_duration_ms = 10*60*1000,
                                 song_limit=5000, preserve_clusters_size=0.2, min_cluster_affinity_level=0):
+    significant_clusters = []
     song_features = load_song_features(song_helper.db_make_song_selector_for_genre(genre_id, max_duration_ms,
                                                                                    song_limit))
+    # afaik there is one empty genre
+    if len(song_features) == 0:
+        return significant_clusters
     song_features, _, _ = prepare_songs(song_features, G.features_scaler)
     # remove songs without affinity (sleepy, wakeful etc)
     songs_affinity = np.apply_along_axis(f_has_affinity, 1, song_features)
@@ -301,7 +544,6 @@ def init_extract_genre_clusters(genre_id, dist_mod, f_affinity, f_has_affinity, 
     y_pred = dpgmm.predict(weighted_features)
     print('cluster sizes: %s' % str(np.bincount(y_pred)))
     # find clusters > 30% of all elements
-    significant_clusters = []
     cluster_sizes = np.bincount(y_pred)
     for i, c in enumerate(cluster_sizes):
         if c / len(y_pred) > preserve_clusters_size:
@@ -339,16 +581,16 @@ def init_extract_genre_clusters(genre_id, dist_mod, f_affinity, f_has_affinity, 
 
 
 def init_compute_genre_features(genres, song_features, song_genres):
-    # compute genres average acoustic features and level of sleepines/wakefullness defined as
+    # compute genres average acoustic features and level of _sleepines/wakefullness defined as
     # no of song of given type/all songs in genre
-    genre_features = np.zeros((len(genres) + 1, _f_acoustic_i), dtype=np.float32)
+    genre_features = np.zeros((len(genres) + 1, _f_duration_id_i+1), dtype=np.float32)
     genre_sleepiness = np.zeros((len(genres) + 1), dtype=np.float32)
     genre_wakefulness = np.zeros((len(genres) + 1), dtype=np.float32)
     for genre_id in genres:
-        genre_songs = song_features[song_genres == genre_id][:, :_f_acoustic_i]
+        genre_songs = song_features[song_genres == genre_id][:, :_f_duration_id_i+1]
         if genre_songs.shape[0] > 0:
-            genre_songs_sleepiness = np.apply_along_axis(lambda f: 1 if is_sleep_song(f) else 0, 1, genre_songs)
-            genre_songs_wakefulness = np.apply_along_axis(lambda f: 1 if is_wakeup_song(f) else 0, 1, genre_songs)
+            genre_songs_sleepiness = np.apply_along_axis(lambda f: 1 if _is_sleep_song(f) else 0, 1, genre_songs)
+            genre_songs_wakefulness = np.apply_along_axis(lambda f: 1 if _is_wakeup_song(f) else 0, 1, genre_songs)
             genre_features[genre_id] = np.mean(genre_songs, axis=0)
             genre_sleepiness[genre_id] = np.mean(genre_songs_sleepiness)
             genre_wakefulness[genre_id] = np.mean(genre_songs_wakefulness)
@@ -461,16 +703,29 @@ def init_connect_genre_graph_components(graph, max_distance, genres, genres_name
                     raise nx.NetworkXNoPath()
                 for tc in to_connect:
                     # print('connect %s to %s' % (genres[tc], gn))
-                    graph.add_edge(gn, tc, weight=max_distance)
+                    graph.add_edge(gn_id, tc, weight=max_distance)
         # print('-------------')
 
 
-def compute_sleep_clusters():
-    for gid, sleepiness in enumerate(G.genre_sleepiness):
+def init_compute_sleep_clusters():
+    for gid, sleepiness_lvl in enumerate(G.genre_sleepiness):
         if gid in G.genres:
             gname = G.genres[gid]
-            if gname not in _blocked_sleep_genres and sleepiness > _is_sleep_genre_threshold:
-                yield gid, init_extract_genre_clusters(gid, _dist_mod_sleep, sleepines, is_sleep_song)
+            if gname not in _blocked_sleep_genres and sleepiness_lvl > _is_sleep_genre_threshold:
+                yield gid, init_extract_genre_clusters(gid, _dist_mod_sleep, _sleepines, _is_sleep_song)
+
+
+def init_compute_wakeup_clusters():
+    for gid, wakefulness_lvl in enumerate(G.genre_wakefulness):
+        if gid in G.genres:
+            gname = G.genres[gid]
+            if gname not in _blocked_wakeup_genres and wakefulness_lvl > _is_wakeup_genre_threshold:
+                yield gid, init_extract_genre_clusters(gid, _dist_mod_sleep, _wakefulness, _is_wakeup_song)
+
+
+def init_compute_pop_clusters():
+    for gid in G.genres:
+        yield gid, init_extract_genre_clusters(gid, _dist_mod_sleep, lambda x: 1, lambda x: True)
 
 
 def init_songs_db():
