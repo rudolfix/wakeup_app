@@ -50,8 +50,8 @@ def get_library(user):
     r = API(_config.MUSIC_GRAPH_SERVER_ENDPOINT, append_slash=False).library(user.spotify_id)
     lib_status = r.get()['result']
     lib_status['created_at'] = c.parse_iso8601datemili(lib_status['created_at'])
-    if lib_status['updated_at'] is not None:
-        lib_status['updated_at'] = c.parse_iso8601datemili(lib_status['updated_at'])
+    if lib_status['resolved_at'] is not None:
+        lib_status['resolved_at'] = c.parse_iso8601datemili(lib_status['resolved_at'])
     return lib_status
 
 
