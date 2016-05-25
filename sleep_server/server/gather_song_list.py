@@ -62,7 +62,7 @@ def resolve_user_library(user, genres_name):
 
 
 def test_resolve_tracks_for_user(user, song_tuples):
-    tracks, added_songs = spotify_helper.resolve_tracks_for_user(user, song_tuples)
+    tracks, added_songs, _ = spotify_helper.resolve_tracks_for_user(user, song_tuples)
 
 
 if __name__ == '__main__':
