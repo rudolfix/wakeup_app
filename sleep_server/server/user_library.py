@@ -27,10 +27,16 @@ class UserLibrary:
         self.unresolved_artists = None
         self.created_at = datetime.utcnow()
         self.updated_at = None
+        self.resolved_at = None
 
     @property
     def is_resolved(self):
         return self.tracks is not None
+
+    @property
+    def can_be_updated(self):
+        return self.unresolved_tracks is None or \
+               (self.unresolved_tracks == [] and (datetime.utcnow() - self.updated_at).seconds > 3 * 60)
 
     @staticmethod
     def upgrade_record(user):
@@ -260,6 +266,7 @@ def resolve_user_library(library, genres_name):
                 new_artists.append(db_a)
     library.artists = library.unresolved_artists
     library.unresolved_artists = None
+    library.resolved_at = datetime.utcnow()
 
     return indexed_songs, found_songs, not_found_songs, new_artists
 
