@@ -84,10 +84,34 @@ def update_sleep_clusters_cache():
     """Updates sleep clusters cache"""
     mgh.G = global_from_cache()
     sn = str(datetime.utcnow())
-    for gid, sleep_clusters in mgh.compute_sleep_clusters():
+    for gid, sleep_clusters in mgh.init_compute_sleep_clusters():
         gname = mgh.G.genres[gid]
         print('saving sleep clusters for "%s"' % gname)
         _save_to_cache('cluster', 'sleep_' + gname, sn, sleep_clusters)
+    print('global objects saved with sn=%s' % sn)
+
+
+@CacheCommand.command
+def update_wakeup_clusters_cache():
+    """Updates wakeup clusters cache"""
+    mgh.G = global_from_cache()
+    sn = str(datetime.utcnow())
+    for gid, wakeup_clusters in mgh.init_compute_wakeup_clusters():
+        gname = mgh.G.genres[gid]
+        print('saving wakeup clusters for "%s"' % gname)
+        _save_to_cache('cluster', 'wakeup_' + gname, sn, wakeup_clusters)
+    print('global objects saved with sn=%s' % sn)
+
+
+@CacheCommand.command
+def update_pop_clusters_cache():
+    """Updates popular clusters cache"""
+    mgh.G = global_from_cache()
+    sn = str(datetime.utcnow())
+    for gid, pop_clusters in mgh.init_compute_pop_clusters():
+        gname = mgh.G.genres[gid]
+        print('saving popular clusters for "%s"' % gname)
+        _save_to_cache('cluster', 'pop_' + gname, sn, pop_clusters)
     print('global objects saved with sn=%s' % sn)
 
 
