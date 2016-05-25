@@ -168,14 +168,16 @@ def resolve_tracks_for_user(user, track_mappings):
     assert len(spotify_tracks) == len(track_ids), 'number of tracks from spotify must eq no. input tracks'
     added_songs = {}
     resolved_tracks = []
+    resolved_mappings = []
     for track, mapping in zip(spotify_tracks, track_mappings):
         if track is None or not track['is_playable']:
             continue
         if mapping[1] in added_songs:  # this song was added
             continue
         added_songs[mapping[1]] = mapping[0]
+        resolved_mappings.append(mapping)
         resolved_tracks.append(track)
-    return resolved_tracks, added_songs
+    return resolved_tracks, added_songs, resolved_mappings
 
 
 def spotify_login(redirect_url):
