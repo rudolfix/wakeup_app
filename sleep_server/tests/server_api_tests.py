@@ -36,7 +36,7 @@ def test_get_best_playlist_id(user, playlist_type):
     ul._delete_library(user.spotify_id, ul.UserLibraryProps)
     lib_song_features, _ = mgh.load_user_library_song_features(library)
     lib_song_features, _, _ = mgh.prepare_songs(lib_song_features, mgh.G.features_scaler)
-    top_sleepys = mgh.compute_sleep_genres(lib_song_features, library.artists)
+    top_sleepys, _ = mgh.compute_sleep_genres(lib_song_features, library.artists)
 
     for _ in range(10):
         playlist_id = ul.get_best_playlist_id(playlist_type, library, top_sleepys, keep_n_last=4)
