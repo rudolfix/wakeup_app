@@ -45,7 +45,7 @@
             {% endif %}
             <h3>Wake up playlists</h3>
             Current playlist <b>{{ user_playlists['wake_up']['name'] }}</b>
-            {% if user_playlists['wake_up']['uri'] %} <span class="green">created</span> length {{ user_playlists['wake_up']['length'] / (60 * 1000) }}
+            {% if user_playlists['wake_up']['uri'] %} <span class="green">created</span> length {{ (user_playlists['wake_up']['length'] or 0) / (60 * 1000) }}
             {% else %} <span class="red">not created</span> {% endif %}
             <br/>
             <input type="number" name="wake_up_dl" min="10" max="80" step="1" value="{{ (user_playlists['wake_up']['desired_length'] / (60 * 1000))|int }}"/> minutes
