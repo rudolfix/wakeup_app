@@ -1,4 +1,5 @@
 import os
+import time
 from contextlib import contextmanager
 
 import pytest
@@ -6,7 +7,7 @@ from flask import url_for, appcontext_pushed, json
 
 import api
 from api import user_helper
-from common import spotify_helper
+from common import spotify_helper, music_graph_client as mgc, common as c
 
 
 @contextmanager
@@ -17,21 +18,6 @@ def context_set(a):
         yield
 
 
-def setup_module(module):
-    with api.app.app_context():
-        api.app.config.from_object('api.config.TestConfig')
-        if os.environ.get('WAKEUPP_APP_CONFIG_FILE') is not None:
-            api.app.config.from_envvar('WAKEUPP_APP_CONFIG_FILE')
-        api.app.config['USER_STORAGE_URI'] += '../test_user_storage/'
-        user_helper.init_user_storage()
-        api.app.config['SERVER_NAME'] = api.app.config['HOST_NAME']
-        api.app.config['DEBUG'] = True
-        api.app.config['TESTING'] = True
-        # token_path = '/vagrant/' + api.app.config['TEST_REFRESH_TOKEN']
-        # with open(token_path, 'r') as f:
-        #    api.app.config['TEST_REFRESH_TOKEN'] = f.read().replace('\n', '')
-
-
 @pytest.fixture
 def client():
     # api.app.config.from_object('api.config.TestConfig')
@@ -40,7 +26,7 @@ def client():
     return api.app.test_client()
 
 
-def test_spotify_swap(client):
+def setup_user():
     with api.app.app_context():
         redirect_url = url_for('swap', _external=True)
         url = spotify_helper.spotify_login(redirect_url)
@@ -55,6 +41,7 @@ def test_spotify_swap(client):
     # use code from response
     #l = urllib.parse(redirected_to)
     #with api.app.test_request_context('/swap?code=0'):
+    client = api.app.test_client()
     rv = client.get('/swap?code=0')
     assert rv.status_code == 200
     j = json.loads(rv.data)
@@ -68,8 +55,23 @@ def test_spotify_swap(client):
     api.app.config["TEST_AUTH_HEADER"] = user.authorization_string
 
 
-def test_spotify_refresh(client):
+def setup_module(module):
+    with api.app.app_context():
+        api.app.config.from_object('api.config.TestConfig')
+        if os.environ.get('WAKEUPP_APP_CONFIG_FILE') is not None:
+            api.app.config.from_envvar('WAKEUPP_APP_CONFIG_FILE')
+        api.app.config['USER_STORAGE_URI'] += '../test_user_storage/'
+        user_helper.init_user_storage()
+        api.app.config['SERVER_NAME'] = api.app.config['HOST_NAME']
+        api.app.config['DEBUG'] = True
+        api.app.config['TESTING'] = True
+        # delete library of the test user
+        mgc.delete_library(api.app.config["TEST_SPOTIFY_ID"])
+        # will start creating library etc
+        setup_user()
 
+
+def test_spotify_refresh(client):
     encr_rf, _ = api.app.config["TEST_AUTH_HEADER"].split(' ')
     rv = client.get('/refresh?refresh_token=' + encr_rf)
     assert rv.status_code == 200
@@ -85,31 +87,35 @@ def test_create_playlist(client):
     rv = client.get('/me/playlists', headers = headers)
     assert rv.status_code == 428, 'Playlists data expected to be generating'
     # set playlist generation flag
-    user = user_helper.load_user(api.app.config["TEST_SPOTIFY_ID"])
-    user.is_playlists_ready = True
-    user_helper.save_user(user)
+    # user = user_helper.load_user(api.app.config["TEST_SPOTIFY_ID"])
+    # wait for user library to be ready
+    for _ in range(10):
+        rv = client.get('/me/playlists', headers = headers)
+        if rv.status_code == 200:
+            break
+        time.sleep(6)
+    assert rv.status_code == 200, 'Default playlist data should be returned'
+    _check_playlist_body(rv.data)
     rv = client.get('/me/playlists', headers = headers)
     assert rv.status_code == 200, 'Default playlist data should be returned'
-    # should have two playlists
-    j = _check_ok_response_body(rv.data)
-    assert len(j['result']) == 2
-    #set playlist data
+    _check_playlist_body(rv.data)
+    # skip auth headers -> should throw not authorized
     rv = client.post('/me/playlists/wake_up?desired_length=35')
     assert rv.status_code == 401
     _check_error_response_body(rv.data)
+    #set playlist data
     rv = client.post('/me/playlists/wake_up?desired_length=' + str(45*60*1000), headers=headers)
     assert rv.status_code == 200
     _check_ok_response_body(rv.data)
     rv = client.get('/me/playlists', headers = headers)
-    assert rv.status_code == 200, 'Default playlist data should be returned'
-    _check_ok_response_body(rv.data)
+    assert rv.status_code == 200, 'playlist data should be returned'
+    _check_playlist_body(rv.data)
     rv = client.post('/me/playlists/fall_asleep?desired_length=' + str(35*60*1000), headers=headers)
     assert rv.status_code == 200
     _check_ok_response_body(rv.data)
     rv = client.get('/me/playlists', headers = headers)
     assert rv.status_code == 200
-    j = _check_ok_response_body(rv.data)
-    assert len(j['result']) == 2
+    _check_playlist_body(rv.data)
     #test list overwrite
     rv = client.post('/me/playlists/wake_up?desired_length=' + str(80*60*1000), headers=headers)
     assert rv.status_code == 200
@@ -119,9 +125,16 @@ def test_create_playlist(client):
     _check_error_response_body(rv.data)
     rv = client.get('/me/playlists', headers = headers)
     assert rv.status_code == 200
-    j = _check_ok_response_body(rv.data)
-    assert len(j['result']) == 2
-    #check number of playlists
+    _check_playlist_body(rv.data)
+
+
+def _check_playlist_body(body):
+    # should have two playlists
+    j = _check_ok_response_body(body)
+    assert len(j['result']) == 2, 'response should contain two playlists'
+    for pl in j['result']:
+        assert pl['type'] in c.possible_list_types
+        assert pl['uri'] is not None, pl['type'] + ' playlist should have uri attr set'
 
 
 def _check_ok_response_body(body):
