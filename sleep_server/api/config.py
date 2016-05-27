@@ -1,4 +1,5 @@
 from common.config import ConfigBase
+import logging
 
 
 class Config(ConfigBase):
@@ -9,17 +10,15 @@ class Config(ConfigBase):
     HOST_NAME = 'dev.wakeupapp.com'
     USER_STORAGE_URI = '/home/vagrant/user_storage/'
     TESTING = False
-    MOCKUP_MIN_PLAYLIST_GEN_SEC = 15
-    MOCKUP_MAX_PLAYLIST_GEN_SEC = 2*60
     MAXIMUM_PLAYLIST_LENGTH = 80*60*1000
     MINIMUM_PLAYLIST_LENGTH = 15*60*1000
     DEFAULT_PLAYLIST_LENGTH = 30*60*1000
+    LOG_FILE = '/var/log/sleep_server/api.log'
+    LOG_LEVEL = logging.DEBUG
     DEBUG = True
 
 
 class TestConfig(Config):
-    # USER_STORAGE_URI = super.USER_STORAGE_URI + '/../test_user_storage/'
+    TEST_SPOTIFY_ID = 'rudolfix-us'
     TEST_REFRESH_TOKEN = 'AQBz4V96VzESfrk7NM0QGocj-2mNKfaIX-rAXa-ClZBbhAzkzX0xRYs07y6BFdOWK6Q1ak-5gx-FE1Q1BzoxFy3zupqQMGxlnIHUQt4qed8eY5oRyVqKB3zqx4A6bgzypf0' # put valid refresh token here. use /admin to obtain it
     TESTING = True
-    MOCKUP_MIN_PLAYLIST_GEN_SEC = 10000
-    MOCKUP_MAX_PLAYLIST_GEN_SEC = 10001
