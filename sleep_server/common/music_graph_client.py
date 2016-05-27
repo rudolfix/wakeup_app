@@ -62,6 +62,12 @@ def resolve_library(user):
 
 
 @slumberhandler
+def delete_library(user_id):
+    r = API(_config.MUSIC_GRAPH_SERVER_ENDPOINT, append_slash=False).library(user_id)
+    return r.delete()
+
+
+@slumberhandler
 def get_possible_playlists(user, playlist_type=None):
     r = API(_config.MUSIC_GRAPH_SERVER_ENDPOINT, append_slash=False).library(user.spotify_id).playlists(playlist_type)
     return r.get()['result']

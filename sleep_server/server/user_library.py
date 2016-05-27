@@ -111,6 +111,7 @@ def _delete_library(spotify_id, lib_class):
     if os.path.isfile(path):
         os.remove(path)
 
+
 def _load_library(spotify_id, lib_class):
     path = app.config['USER_STORAGE_URI'] + spotify_id + lib_class.storage_extension
     if os.path.isfile(path):
@@ -313,3 +314,9 @@ def save_library(library):
     with open(path, 'bw') as f:
         library.updated_at = datetime.utcnow()
         library.serialize(library, f)
+
+
+def delete_library(spotify_id):
+    _delete_library(spotify_id, UserLibraryProps)
+    _delete_library(spotify_id, UserLibrary)
+

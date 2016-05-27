@@ -50,6 +50,12 @@ def library_get_props(user_id):
                                 'can_be_updated': library.can_be_updated})
 
 
+@app.route('/library/<user_id>', methods=['DELETE'])
+def library_delete(user_id):
+    user_library.delete_library(user_id)
+    return 'deleted', 204
+
+
 @app.route('/library/<user_id>/playlists')
 @app.route('/library/<user_id>/playlists/<playlist_type>')
 def library_list_playlists(user_id, playlist_type=None):
@@ -68,14 +74,14 @@ def library_list_playlists(user_id, playlist_type=None):
             top_sleepys, _ = mgh.compute_sleep_genres(lib_song_features, library.artists)
             for gid, prevalence, sleepiness, user_pref in top_sleepys:
                 name = 'based on %s with %d%% sleepiness' % (mgh.G.genres[gid], int(sleepiness*100))
-                print('%s(%i): %f%% affinity:%f pref:%f' % (name, gid, 100*prevalence, 100*sleepiness, user_pref))
+                # print('%s(%i): %f%% affinity:%f pref:%f' % (name, gid, 100*prevalence, 100*sleepiness, user_pref))
                 rv[pt].append(add_pl_item(gid, name, prevalence, user_pref))
         if pt == 'wake_up':
             rv[pt] = []
             top_wakeful, _ = mgh.compute_wakeup_genres(lib_song_features, library.artists)
             for gid, prevalence, wakefulness, user_pref in top_wakeful:
                 name = 'ends on %s with %d%% wakefulness' % (mgh.G.genres[gid], int(wakefulness*100))
-                print('%s(%i): %f%% affinity:%f pref:%f' % (name, gid, 100*prevalence, 100*wakefulness, user_pref))
+                # print('%s(%i): %f%% affinity:%f pref:%f' % (name, gid, 100*prevalence, 100*wakefulness, user_pref))
                 rv[pt].append(add_pl_item(gid, name, prevalence, user_pref))
     return json.jsonify(result=rv)
 
@@ -127,7 +133,8 @@ def create_playlist(user, user_id, playlist_type, playlist_id=None):
         wakeup_songs = mgh.generate_wakeup_playlist(playlist_id, wakeup_song_features, lib_song_features,
                                                     sleep_genres, pop_genres, 90 * 60 * 1000)
         _, _, rm = song_helper.prepare_playable_tracks(user, [int(f[mgh._f_song_id_i]) for f in wakeup_songs])
-        pl_tracks, _ = mgh.trim_song_slice_length_by_acoustics(rm, wakeup_songs, 60*60*1000, mgh._sound_energy_dist)
+        pl_tracks, exact_duration = mgh.trim_song_slice_length_by_acoustics(rm, wakeup_songs, 60*60*1000,
+                                                                            mgh._sound_energy_dist)
 
     return json.jsonify(result={playlist_type: {'duration_ms': exact_duration, 'tracks': pl_tracks}})
 
@@ -158,7 +165,6 @@ def init_logging():
     log = logging.getLogger('werkzeug')
     log.setLevel(app.config['LOG_LEVEL'])
     log.addHandler(handler)
-    pass
 
 
 def start(start_mq=True):
