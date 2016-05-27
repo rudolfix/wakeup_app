@@ -21,9 +21,9 @@ class Config(ConfigBase):
         # 'virtual_host': 'vhost'  # amqp vhost
     }
     FLASK_PIKA_POOL_PARAMS = {
-        'pool_size': 8+2,  # 2 channels for in process consumers
+        'pool_size': 8 + 2,  # 2 channels for in process consumers
         'pool_recycle': 600
     }
     # logging
     LOG_FILE = '/var/log/sleep_server/server.log'
-    LOG_LEVEL = logging.INFO
+    LOG_LEVEL = logging.DEBUG
