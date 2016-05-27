@@ -18,12 +18,11 @@ for example:
 You can obtain refresh and access tokens in your session object (see SDK). Please note that refresh_token is an server encrypted value
 
 Few additional remarks:
-
-1. User need **premium account** to use this sleep app. Free account will not give you access to play lists and streaming
+1. User needs **premium account** to use this sleep app. Free account will not give you access to play lists and streaming
 2. See later on configuring Spotify App, without it you will not login
 3. Refresh spotify sessions as described in SDK
 4. Please provide correct spotify scope during login, please find current scope in /sleep_server/api/config.py
->playlist-read-private playlist-read-collaborative playlist-modify-private user-follow-read user-library-read user-read-private
+>playlist-read-private playlist-read-collaborative playlist-modify-private user-follow-read user-library-read user-read-private user-top-read
 
 
 
@@ -97,6 +96,8 @@ curl -X POST "http://wakeupapp.dev.army/me/playlists/wake_up?desired_length=3000
 }
 ```
 
+Special HTTP error codes:
+1. 428: user data is not processed and playlist cannot be generated. it typically take from 15 to 2 minutes. currently (demo) this is a random time
 
 Example Api Session
 -----------------------
@@ -107,8 +108,9 @@ Example Api Session
   Swap method will set desired length for user's playlists to *30 minutes*
 2. Swap method will fail for free spotify users. You can always re-login later.
 3. You can use GET /me/playlists/ to check if music graph is ready.
-4. When graph is ready, client should set playlist length for both playlist types with POST
-5. At this point playlists are ready and will be always available. Client can call GET on the resource for the playlists actual length and uris.
+4. When graph is ready, playlists with default length will be created on first GET
+5. At this point playlists are ready and will be always available.
+6. When graph is ready, client may set playlist length for both playlist types with POST. Playlist content will be re-created even if length is not changed
 
 
 Error Handling
