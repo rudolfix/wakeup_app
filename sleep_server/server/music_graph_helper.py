@@ -28,8 +28,10 @@ _is_wakeup_genre_threshold = 0.65 # genres with that many wakeful songs may be u
 _blocked_sleep_genres = ['modern performance', 'classical christmas']
 _blocked_wakeup_genres = []
 
+_significant_genres = 4  # number of top genres for artist that will be used in user pref computations
+
 _dist_mod_sleep = [3, 0.3, 1, 0.5, 1, 1, 1, 5]  # distance modifiers when clustering songs (dimensions get weighted)
-_sound_energy_dist = [0, 3, 4, 5]  # distance measure based on energy and soft features: speechiness acousticness etc.
+_sound_energy_dist = [0, 4, 5, 8]  # distance measure based on energy and soft features: speechiness acousticness etc.
 # _dist_mod_library = [3,0.3,1,0.5,2,2,1,3]
 
 
@@ -235,7 +237,8 @@ def _top_songs_with_affinity(song_features, limit, f_affinity, f_affinity_tresho
 
 def _compute_genres_for_songs(lib_song_features, followed_artists, genres_affinity, f_lib_song_preference,
                               affinity_threshold,
-                              genre_prevalence_threshold=0.02, genre_prevalence_count_threshold=10000):
+                              genre_prevalence_threshold=0.02, genre_prevalence_count_threshold=10000,
+                              significant_genres=_significant_genres):
     # artists_ids = lib_song_features[:, _f_artist_id_i]
     genres_accu = []
     genres_pref = {}
@@ -246,7 +249,7 @@ def _compute_genres_for_songs(lib_song_features, followed_artists, genres_affini
         if aid in followed_artists:
             pref += 0.25
         if aid in G.artists_genres:
-            gids = G.artists_genres[aid]
+            gids = G.artists_genres[aid][:significant_genres]
             genres_accu.extend(gids)
             for gid in gids:
                 if gid in genres_pref:
@@ -363,7 +366,8 @@ def compute_wakeup_genres(library_features, followed_artists, check_songs=100):
     most_n_indexer = _top_songs_with_affinity(library_features, check_songs, _wakefulness)
     most_song_features = library_features[most_n_indexer]
     genres = _compute_genres_for_songs(most_song_features, followed_artists, G.genre_wakefulness,
-                                       _lib_song_wake_preference, _is_wakeup_genre_threshold)
+                                       _lib_song_wake_preference, _is_wakeup_genre_threshold,
+                                       significant_genres=8)
     return [g for g in genres if G.genres[g[0]] not in _blocked_wakeup_genres], most_song_features
 
 
@@ -395,9 +399,9 @@ def best_song_idx_with_genre(song_features, gid, min_duration_ms, max_duration_m
         # get only != -1
         sorted_idxs = np.argsort(distances)
         sorted_idxs = sorted_idxs[distances[sorted_idxs] > -1][::-1][:randlimit]
-        r_idx = random.randint(0, min(randlimit - 1, len(distances) - 1))
+        # r_idx = random.randint(0, min(randlimit - 1, len(distances) - 1))
         # print('choose from %s idx %i' % (sorted_idxs, r_idx))
-        return sorted_idxs[r_idx]
+        return random.choice(sorted_idxs)
 
 
 def find_closest_nodes_subgraph(graph, source, targets):
@@ -431,10 +435,12 @@ def generate_wakeup_playlist(wake_gid, lib_wake_song_features, gr_song_features,
     possible_sleep_genres = [g[0] for g in top_sleep_genres]
     # genre similarity via graph works much better
     end_gid = random.choice(find_closest_nodes_subgraph(G.G_genre_sim, wake_gid, possible_sleep_genres))[0]
+    app.logger.debug('going from %s to %s' % (G.genres[end_gid], G.genres[wake_gid]))
     # print('start genre %s' % G.genres[wake_gid])
     # print('end genre %s' % G.genres[end_gid])
-    sleepy_clusters = init_extract_genre_clusters(end_gid, _dist_mod_sleep, _sleepines, _is_sleep_song)
-    end_songs = np.vstack(c[2] for c in sleepy_clusters)
+    from server import cache
+    sleepy_clusters = cache.get_genre_clusters('sleep', end_gid)
+    end_songs = random.choice(sleepy_clusters)[2][:300, :]  # np.vstack(c[2] for c in sleepy_clusters)
     end_song_idx = find_closest_song(init_song, end_songs, sound_similarity, 1)
     end_song = end_songs[end_song_idx]
     # use genre similarity graph to connect wake_gid to end_gid
@@ -507,7 +513,6 @@ def generate_wakeup_playlist(wake_gid, lib_wake_song_features, gr_song_features,
             # c_songs = np.vstack(c[2] for c in clusters)
 
         # clusters = init_extract_genre_clusters(gid, _dist_mod_sleep, f_affinity, f_has_affinity)
-        import cache
         try:
             clusters = cache.get_genre_clusters(cluster_type, gid)
         except CacheEntryNotExistsException:
@@ -529,7 +534,8 @@ def init_extract_genre_clusters(genre_id, dist_mod, f_affinity, f_has_affinity, 
                                 song_limit=5000, preserve_clusters_size=0.2, min_cluster_affinity_level=0):
     significant_clusters = []
     song_features = load_song_features(song_helper.db_make_song_selector_for_genre(genre_id, max_duration_ms,
-                                                                                   song_limit))
+                                                                                   song_limit,
+                                                                                   significant_genres=_significant_genres))
     # afaik there is one empty genre
     if len(song_features) == 0:
         return significant_clusters
@@ -564,8 +570,8 @@ def init_extract_genre_clusters(genre_id, dist_mod, f_affinity, f_has_affinity, 
         clf = sklearn.svm.OneClassSVM(nu=0.1, kernel="rbf", gamma=0.1)
         clf.fit(cluster_features)
         novelty_pred = clf.predict(cluster_features)
-        print('%% of outliers in dataset: %f%%' % (
-        novelty_pred[novelty_pred == -1].size * 100.0 / cluster_features.shape[0]))
+        print('%% of outliers in dataset: %f%%' %
+              (novelty_pred[novelty_pred == -1].size * 100.0 / cluster_features.shape[0]))
         novelty_decision = clf.decision_function(cluster_features)[:, 0]
         novelty_decision_sort = np.argsort(novelty_decision)[::-1]
         for sort_id in novelty_decision_sort:
@@ -725,7 +731,7 @@ def init_compute_wakeup_clusters():
 
 def init_compute_pop_clusters():
     for gid in G.genres:
-        yield gid, init_extract_genre_clusters(gid, _dist_mod_sleep, lambda x: 1, lambda x: True)
+        yield gid, init_extract_genre_clusters(gid, _dist_mod_sleep, _wakefulness, lambda x: True)#lambda x: 1, lambda x: True)
 
 
 def init_songs_db():

@@ -268,13 +268,13 @@ def db_make_song_selector_from_list(song_ids):
     return sqlselect(_song_sel_columns, Song.SongId.in_(song_ids))
 
 
-def db_make_song_selector_for_genre(genre_id, max_duration_ms, limit, genre_source_types=None):
+def db_make_song_selector_for_genre(genre_id, max_duration_ms, limit, genre_source_types=None, significant_genres=4):
     # todo: write this SQL in alchemy (which is ridiculous)
     gst = genre_source_types or ['1', '2'] #  GenreSourceType.echonest.value, GenreSourceType.infered.value
     song_in_genre_q = " Songs.DurationMs < %i AND EXISTS (SELECT 1 FROM Artists a JOIN ArtistGenres ag ON a.ArtistId "\
-                  "= ag.ArtistId WHERE a.ArtistId = Songs.ArtistId AND ag.GenreId = %i AND ag.Ord < 4 AND ag.SourceType IN (%s) )"
+                  "= ag.ArtistId WHERE a.ArtistId = Songs.ArtistId AND ag.GenreId = %i AND ag.Ord < %i AND ag.SourceType IN (%s) )"
     return sqlselect(_song_sel_columns)\
-        .where(sqltext(song_in_genre_q % (max_duration_ms, genre_id, ','.join(gst))))\
+        .where(sqltext(song_in_genre_q % (max_duration_ms, genre_id, significant_genres, ','.join(gst))))\
         .order_by(Song.Hotness.desc()).limit(limit)
 
 
