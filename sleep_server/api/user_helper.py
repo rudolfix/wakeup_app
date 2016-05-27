@@ -113,12 +113,19 @@ def create_user_playlist(user, playlist_type, desired_length, playlist_id=None):
 
 
 def gather_music_data(user):
-    mgc.resolve_library(user)
+    can_be_updated = True
+    try:
+        can_be_updated = mgc.get_library(user)['can_be_updated']
+    except LibraryNotExistsException:
+        pass
+    if can_be_updated:
+        mgc.resolve_library(user)
 
 
-def check_user_playlists_generation_status(user):
+def throw_on_user_playlists_not_ready(user):
     lib_status = mgc.get_library(user)
-    return lib_status['is_resolved']
+    if not lib_status['is_resolved']:
+        raise PlaylistsDataNotReadyException()
     # if not user.is_playlists_ready:
     #     # mockup playlist wait time max 2 mins, min 15 sec
     #     min_gen = app.config['MOCKUP_MIN_PLAYLIST_GEN_SEC']
