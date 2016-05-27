@@ -76,6 +76,9 @@ def _user_lib_updater_callback(ch, method, properties, body):
 
 
 def _run_mq_consumer(name, callback, thread):
+    # leave sleep below, there is a race when uwsgi and pika start together, we should separate this to mq server
+    # todo: move mq consumer to a separate process
+    time.sleep(5)
     while True:
         channel = None
         with _mq_lock:
@@ -97,6 +100,7 @@ def _run_mq_consumer(name, callback, thread):
         try:
             app.logger.info('queue %s is consuming' % name)
             channel.start_consuming()
+            # time.sleep(30)
             fpika.return_channel(channel)
             app.logger.info('queue %s shutdown' % name)
             return
