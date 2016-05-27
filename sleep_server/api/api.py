@@ -5,6 +5,8 @@ from common import spotify_helper, common
 from api.user import User
 from api import app, user_helper
 from api.exceptions import *
+import logging
+from logging.handlers import RotatingFileHandler
 
 
 def check_user(f):
@@ -20,11 +22,11 @@ def check_user(f):
 @check_user
 def get_playlists(user):
     # if playlist are not yet ready deny access
-    user_helper.check_user_playlists_generation_status(user)
+    user_helper.throw_on_user_playlists_not_ready(user)
     # if playlist props were not set create playlists with default settings
-    for pl in user.playlists:
+    for pl in user.playlists.copy():
         if pl['uri'] is None:
-            user_helper.create_user_playlist(user, pl['playlist_type'], pl['desired_length'])
+            user_helper.create_user_playlist(user, pl['type'], pl['desired_length'])
             user_helper.save_user(user)
     # if user.playlists is None or len(user.playlists) != 2:
     #     raise PlaylistsPropsNotSetException()
@@ -48,7 +50,7 @@ def set_playlist(user, playlist_type):
 
     if playlist_type not in common.possible_list_types:
         raise PlaylistIncorrectType(playlist_type, common.possible_list_types)
-    user_helper.check_user_playlists_generation_status(user)
+    user_helper.throw_on_user_playlists_not_ready(user)
     user_pl_meta = user_helper.create_user_playlist(user, playlist_type, desired_length)
     user_helper.save_user(user)
     return json.jsonify(result=user_pl_meta)
@@ -93,13 +95,28 @@ def refresh():
 
 @app.errorhandler(ApiException)
 def handle_api_error(e):
+    if type(e) is not PlaylistsDataNotReadyException:
+        app.logger.exception(e)
     return json.jsonify(make_error_dict(e, e.status_code)), e.status_code
 
 
 @app.errorhandler(Exception)
 def handle_error(e):
+    app.logger.exception(e)
     return json.jsonify(make_error_dict(e, 500)), 500
 
 
 def make_error_dict(e, status_code):
     return {'error': { 'status': status_code, 'code': e.__class__.__name__, 'message': str(e) }}
+
+
+def init_logging():
+    handler = RotatingFileHandler(app.config['LOG_FILE'], maxBytes=100000, backupCount=10)
+    formatter = logging.Formatter('%(asctime)s | %(filename)s:%(lineno)d | %(funcName)s | %(levelname)s | %(message)s ')
+    handler.setFormatter(formatter)
+    handler.setLevel(app.config['LOG_LEVEL'])
+    app.logger.addHandler(handler)
+    app.logger.setLevel(app.config['LOG_LEVEL'])
+    log = logging.getLogger('werkzeug')
+    log.setLevel(app.config['LOG_LEVEL'])
+    log.addHandler(handler)
