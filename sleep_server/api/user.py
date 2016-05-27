@@ -15,7 +15,6 @@ class User(UserBase):
         self.playlists = []
         self.created_at = datetime.utcnow()
         self.updated_at = None
-        self.is_playlists_ready = False
 
     @staticmethod
     def upgrade_user(user):
