@@ -1,0 +1,48 @@
+version: '2'
+services:
+  mysql:
+    restart: always
+    image: mysql/mysql-server:latest
+    volumes:
+      - dbdata:/var/lib/mysql
+    expose:
+      - "3306"
+    env_file: ./deployment/mysql_prod.env
+
+  api:
+    restart: always
+    build: ./sleep_server
+    # - "172.31.18.128:80:80"
+    ports:
+      - "80:80"
+    links:
+      - mysql
+    volumes_from:
+      - data
+    volumes:
+      - userdata:/var/local/sleep_server/user_storage/
+    environment:
+      - PYTHONIOENCODING=utf-8
+    #networks:
+    #  - front-tier
+    #  - back-tier
+    command: /usr/local/sleep_server/run_all.sh
+    # command: sleep 1d
+
+  data:
+    build: ./data
+    volumes:
+      - /var/local/sleep_server/data/
+    command: "true"
+
+volumes:
+  dbdata:
+    driver: local
+  userdata:
+    driver: local
+
+#networks:
+#  front-tier:
+#    driver: bridge
+#  back-tier:
+#    driver: bridge

@@ -1,0 +1,14 @@
+Dockerfile
+server/migrations
+server/.*
+server/old
+tests/test_accounts
+.ipynb_checkpoints/
+
+# Byte-compiled / optimized / DLL files
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/*$py.class
+**/*.ipynb
