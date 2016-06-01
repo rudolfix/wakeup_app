@@ -121,7 +121,7 @@ def create_playlist(user, user_id, playlist_type, playlist_id=None):
     if playlist_type == 'wake_up':
         if playlist_id is None:
             # when playlist id is not present choose genre where user has most preferences
-            top_wakeup, _ = mgh.compute_sleep_genres(lib_song_features, library.artists)
+            top_wakeup, _ = mgh.compute_wakeup_genres(lib_song_features, library.artists)
             # todo: if less than wakeup clusters use spotify recommend and skip all further logic
             playlist_id = user_library.get_best_playlist_id(playlist_type, library, top_wakeup)
         # get most wakeful songs
@@ -131,9 +131,9 @@ def create_playlist(user, user_id, playlist_type, playlist_id=None):
         # cut lowest 20% genres, typically crap you not remember
         pop_genres = pop_genres[:int(-len(pop_genres)*0.2)]
         wakeup_songs = mgh.generate_wakeup_playlist(playlist_id, wakeup_song_features, lib_song_features,
-                                                    sleep_genres, pop_genres, 90 * 60 * 1000)
+                                                    sleep_genres, pop_genres, int(desired_length + 0.5*desired_length))
         _, _, rm = song_helper.prepare_playable_tracks(user, [int(f[mgh._f_song_id_i]) for f in wakeup_songs])
-        pl_tracks, exact_duration = mgh.trim_song_slice_length_by_acoustics(rm, wakeup_songs, 60*60*1000,
+        pl_tracks, exact_duration = mgh.trim_song_slice_length_by_acoustics(rm, wakeup_songs, desired_length,
                                                                             mgh._sound_energy_dist)
 
     return json.jsonify(result={playlist_type: {'duration_ms': exact_duration, 'tracks': pl_tracks}})
@@ -156,7 +156,7 @@ def _make_error_dict(e, status_code):
 
 
 def init_logging():
-    handler = RotatingFileHandler(app.config['LOG_FILE'], maxBytes=100000, backupCount=10)
+    handler = RotatingFileHandler(app.config['LOG_FILE'], maxBytes=100000, backupCount=50)
     formatter = logging.Formatter('%(asctime)s | %(filename)s:%(lineno)d | %(funcName)s | %(levelname)s | %(message)s ')
     handler.setFormatter(formatter)
     handler.setLevel(app.config['LOG_LEVEL'])
