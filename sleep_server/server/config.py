@@ -8,7 +8,6 @@ class Config(ConfigBase):
     # PTELLTDHNE6QEG42C 20 api calls rate limit
     # 9UGMUXTCZ2WT7WWMJ 20
     # V91CRTEB0IFMAJBMB 120 but they disabled ;>
-    HOST_NAME = 'dev.wakeupapp.com'
     TESTING = False
     SQLALCHEMY_DATABASE_URI = 'mysql://dev@localhost/music_graph_dev2'
     DEBUG = True

@@ -7,7 +7,7 @@ class Config(ConfigBase):
     ENCRYPTION_KEY = '62b62c1bf34ea7b996cea01662cece92'
     CLIENT_CALLBACK_URL = 'luxury8wakeup://spotifylogincallback'
     ADMIN_AUTH_COOKIE = 'spotify-auth'
-    HOST_NAME = 'dev.wakeupapp.com'
+    # HOST_NAME = 'dev.wakeupapp.com'
     USER_STORAGE_URI = '/home/vagrant/user_storage/'
     TESTING = False
     MAXIMUM_PLAYLIST_LENGTH = 80*60*1000
