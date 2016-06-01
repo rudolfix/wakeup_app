@@ -15,6 +15,11 @@ _cache_types = {'top_song_stats': {'version': 1}, 'cluster_index': {'version': 1
 CacheCommand = Manager(usage='Perform music graph cache operations')
 
 
+def _prepare_cache_key(key):
+    # todo: use regexp replace instead of string
+    return key.replace(':','_')
+
+
 def _load_from_cache(cache_type, key):
     c_ct = _cache_types[cache_type]
     entry_name = key + '.' + cache_type
