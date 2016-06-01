@@ -20,8 +20,6 @@ def spotifyapihandler(f):
             return f(*args, **kwargs)
         except SpotifyException as spoterr:
             # handle unknown tokens and expired tokens
-            # todo: add logging
-            # app.logger
             if spoterr.http_status == 401: # invalid or expired token
                 if 'Invalid access token' in spoterr.msg:
                     raise SpotifyApiInvalidToken(spoterr.code, spoterr.msg)

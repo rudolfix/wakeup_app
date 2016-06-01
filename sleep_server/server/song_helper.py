@@ -5,7 +5,7 @@ import math
 
 from common.common import *
 from common import spotify_helper
-from server import db
+from server import app, db
 from server.models import Genre, Artist, Song, ArtistGenres, SongTracks, Group, SongGroup, SimilarArtist,\
     GenreSourceType, SimilarGenre, ArtistAdditionalSpotifyIds
 from server.exceptions import *
@@ -19,7 +19,7 @@ _song_sel_columns = [Song.AS_energy, Song.AS_liveness, Song.AS_tempo, Song.AS_sp
 def db_update_artist(pyen_artist, genres_name, additional_spotify_id=None):
     if 'foreign_ids' not in pyen_artist:
         if additional_spotify_id is None:
-            print('artist %s no spotifyID skipped' % pyen_artist['name'])
+            app.logger.debug('artist %s no spotifyID skipped' % pyen_artist['name'])
             return None
         else:
             # it often happens that spotify id is resolved but then not included in echonest artist
@@ -31,9 +31,9 @@ def db_update_artist(pyen_artist, genres_name, additional_spotify_id=None):
     if not db_a:
         db_a = Artist(SpotifyId=artist_sp_id, EchonestId=pyen_artist['id'])
         db.session.add(db_a)
-        print('artist %s NOT found in db, added with %i genres' % (pyen_artist['name'], len(pyen_artist['genres'])))
+        app.logger.debug('artist %s NOT found in db, added with %i genres' % (pyen_artist['name'], len(pyen_artist['genres'])))
     else:
-        print('artist %s FOUND in db, added with %i genres' % (pyen_artist['name'], len(pyen_artist['genres'])))
+        app.logger.debug('artist %s FOUND in db, added with %i genres' % (pyen_artist['name'], len(pyen_artist['genres'])))
     db_a.Name = pyen_artist['name']
     db_a.Hotness = pyen_artist['hotttnesss']
     # write genres only when they exist, do not touch otherwise as Genres may be inferred
@@ -46,7 +46,7 @@ def db_update_artist(pyen_artist, genres_name, additional_spotify_id=None):
     if additional_spotify_id is not None and db_a.SpotifyId != additional_spotify_id:
         # artists may have many spotify ids (all mapping to the same object), store those ids in sep table
         if not any(filter(lambda add_id: add_id.SpotifyId == additional_spotify_id, db_a.AdditionalSpotifyIds)):
-            print('artist %s has ADDITIONAL spotify id %s' % (pyen_artist['name'], additional_spotify_id))
+            app.logger.debug('artist %s has ADDITIONAL spotify id %s' % (pyen_artist['name'], additional_spotify_id))
             db_a.AdditionalSpotifyIds.append(ArtistAdditionalSpotifyIds(SpotifyId=additional_spotify_id))
 
     return db_a
@@ -59,7 +59,7 @@ def db_update_song(pyen_song, db_artist_id, db_genre_id, song_type, processed_so
                    for track in db_dedup_song_tracks(pyen_song['tracks'])]
     # check if exists in spotify
     if len(spotify_ids) == 0:
-        print('song %s (%s) has no spotifyID or ids got deduped, skipped' % (pyen_song['title'], pyen_song['id']))
+        app.logger.debug('song %s (%s) has no spotifyID or ids got deduped, skipped' % (pyen_song['title'], pyen_song['id']))
         return None
     # assert no duplicates in collection
     assert len(set([sid.SpotifyId for sid in spotify_ids])) == len(spotify_ids),\
@@ -73,17 +73,17 @@ def db_update_song(pyen_song, db_artist_id, db_genre_id, song_type, processed_so
         spotify_ids = [track for track in spotify_ids if track.SpotifyId not in
                        [t.SpotifyId for t in orig_db_s.Tracks]]
         orig_db_s.Tracks += spotify_ids
-        print('Song %s (%s) already processed for this artist' % (song_dedup_name, pyen_song['id']))
+        app.logger.debug('Song %s (%s) already processed for this artist' % (song_dedup_name, pyen_song['id']))
         return None
 
-    print('Processing song %s (%s)' % (pyen_song['title'], pyen_song['id']))
+    app.logger.debug('Processing song %s (%s)' % (pyen_song['title'], pyen_song['id']))
     db_s = db.session.query(Song).filter(Song.EchonestId == pyen_song['id']).one_or_none()
     if not db_s:
         db_s = Song(Tracks=spotify_ids, EchonestId=pyen_song['id'], ArtistId=db_artist_id, GenreId=db_genre_id)
         db.session.add(db_s)
-        print('song %s NOT found in db -> added' % pyen_song['title'])
+        app.logger.debug('song %s NOT found in db -> added' % pyen_song['title'])
     else:
-        print('song %s FOUND in db -> updated' % pyen_song['title'])
+        app.logger.debug('song %s FOUND in db -> updated' % pyen_song['title'])
     db_s.Name = pyen_song['title']
     db_s.Hotness = pyen_song['song_hotttnesss']
     db_s.IsToplistSong = song_type
@@ -370,7 +370,7 @@ def transfer_artist(spotify_id, genres_name, force_update=False):
     # get artist from echonest and update in db
     artist = echonest_helper.get_artist(spotify_id)
     if artist is None:
-        print('spotify artist %s does not exist in echonest' % spotify_id)
+        app.logger.debug('spotify artist %s does not exist in echonest' % spotify_id)
         return None, False
     db_a = db_update_artist(artist, genres_name, additional_spotify_id=spotify_id)
     db.session.commit()
@@ -381,7 +381,7 @@ def transfer_similar_artists(user, root_db_a, genres_name):
     similar_artists = OrderedSet()
     sp_similar_artists = spotify_helper.get_similar_artists(user, root_db_a.SpotifyId)
     if sp_similar_artists is None:
-        print('Artist id %s not found in Spotify(similar) anymore' % root_db_a.SpotifyId)
+        app.logger.debug('Artist id %s not found in Spotify(similar) anymore' % root_db_a.SpotifyId)
         db_mark_artist_spotify_not_found(root_db_a.ArtistId)
         db.session.commit()
         return None
@@ -446,7 +446,7 @@ def infer_and_store_genres_for_artists(user, db_artists, genres_name):
 def update_genres_from_echonest():
     # get all genres
     _, genres_name = db_get_genres()
-    print('got %i existing genres from database' % len(genres_name))
+    app.logger.debug('got %i existing genres from database' % len(genres_name))
     genres = echonest_helper.get_all_genres()
     # write unknown genres to db
     new_genres = 0
