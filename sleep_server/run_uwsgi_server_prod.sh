@@ -1,0 +1,1 @@
+uwsgi --http-socket :5001 --enable-threads --wsgi-file /usr/local/sleep_server/server/run.py --callable app --pythonpath /usr/local/sleep_server/server
