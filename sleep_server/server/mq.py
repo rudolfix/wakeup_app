@@ -29,7 +29,7 @@ def mq_callback(f):
             app.logger.error('queue message malformed, MESSAGE DISCARDED (%s)' % str(mf))
             ch.basic_ack(delivery_tag=method.delivery_tag)
         except Exception as exc:
-            app.logger.error(exc)
+            app.logger.exception(exc)
             # traceback.print_exc(file=sys.stdout)
             ch.basic_nack(delivery_tag=method.delivery_tag)
 
@@ -56,7 +56,9 @@ def _user_lib_resolver_callback(ch, method, properties, body):
     if library.unresolved_tracks:
         _, _, _, new_artists = user_library.resolve_user_library(library, music_graph_helper.G.genres_names)
         user_library.save_library(library)
-        song_helper.infer_and_store_genres_for_artists(user, new_artists, music_graph_helper.G.genres_names)
+        if len(new_artists) > 0:
+            song_helper.infer_and_store_genres_for_artists(user, new_artists, music_graph_helper.G.genres_names)
+            # todo: trigger refresh of artists genres in graph
     app.logger.info('RESOLVER CONSUMER done elapsed %f' % (time.time() - start_time))
 
 
