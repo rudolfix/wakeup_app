@@ -1,0 +1,10 @@
+FROM ubuntu
+
+LABEL description='image python modules and necessary libraries'
+
+ENV UWSGI_PROFILE_OVERRIDE ssl=true;routing=true;pcre=true
+RUN mkdir /usr/local/sleep_server/
+ADD requirements.txt /usr/local/sleep_server/
+
+RUN apt-get update && apt-get install -y build-essential python3-dev python3-pip python3-scipy git libpcre3 libpcre3-dev libmysqlclient-dev rabbitmq-server curl libssl-dev screen net-tools iputils-ping vim mysql-client
+RUN pip3 install -r /usr/local/sleep_server/requirements.txt
