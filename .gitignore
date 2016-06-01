@@ -76,6 +76,9 @@ lib64/
 parts/
 sdist/
 var/
+data/
+!data/Dockerfile
+!data/.dockerignore
 *.egg-info/
 .installed.cfg
 *.egg
@@ -120,3 +123,7 @@ target/
 
 # pyenv
 .python-version
+
+# public and priv keys
+*.rsa
+*.rsa.pub
