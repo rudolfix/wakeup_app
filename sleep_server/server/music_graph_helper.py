@@ -548,7 +548,7 @@ def init_extract_genre_clusters(genre_id, dist_mod, f_affinity, f_has_affinity, 
     dpgmm = mixture.DPGMM(n_components=12, covariance_type='tied', n_iter=1000, verbose=0)
     dpgmm.fit(weighted_features)
     y_pred = dpgmm.predict(weighted_features)
-    print('cluster sizes: %s' % str(np.bincount(y_pred)))
+    app.logger.debug('cluster sizes: %s' % str(np.bincount(y_pred)))
     # find clusters > 30% of all elements
     cluster_sizes = np.bincount(y_pred)
     for i, c in enumerate(cluster_sizes):
@@ -558,7 +558,7 @@ def init_extract_genre_clusters(genre_id, dist_mod, f_affinity, f_has_affinity, 
         # add biggest cluster
         max_c_idx = np.argmax(cluster_sizes)
         significant_clusters.append([max_c_idx, cluster_sizes[max_c_idx]])
-    print(significant_clusters)
+    app.logger.debug(significant_clusters)
     # remove outliers
     for cluster in significant_clusters:
         cluster_songs_affinity = []
@@ -570,7 +570,7 @@ def init_extract_genre_clusters(genre_id, dist_mod, f_affinity, f_has_affinity, 
         clf = sklearn.svm.OneClassSVM(nu=0.1, kernel="rbf", gamma=0.1)
         clf.fit(cluster_features)
         novelty_pred = clf.predict(cluster_features)
-        print('%% of outliers in dataset: %f%%' %
+        app.logger.debug('%% of outliers in dataset: %f%%' %
               (novelty_pred[novelty_pred == -1].size * 100.0 / cluster_features.shape[0]))
         novelty_decision = clf.decision_function(cluster_features)[:, 0]
         novelty_decision_sort = np.argsort(novelty_decision)[::-1]

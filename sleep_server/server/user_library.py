@@ -291,7 +291,7 @@ def get_best_playlist_id(playlist_type, library, possible_clusters, keep_n_last 
     pl_idx = bisect(non_sel_pl_cumul, mass)
     if pl_idx > len(non_sel_pl_cumul):
         pl_idx = len(non_sel_pl_cumul) - 1  # for the rare(impossible case we've got mass == 1)
-    print('for mass %f in %s got %i' % (mass, non_sel_pl_cumul, pl_idx))
+    app.logger.debug('for mass %f in %s got %i' % (mass, non_sel_pl_cumul, pl_idx))
     # add to props, save
     sel_pl_id = non_sel_pl[pl_idx][0]
     sel_pl.append(sel_pl_id)
