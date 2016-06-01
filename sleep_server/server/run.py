@@ -10,6 +10,10 @@ from server import server
 # init logging
 server.init_logging()
 # start server
-server.start(start_mq=True)
+try:
+    server.start(start_mq=True)
+except Exception as e:
+    app.logger.exception(e)
+    raise
 if __name__ == '__main__':
-    app.run(app.config['HOST_NAME'], port=5001, debug=app.config['DEBUG'])
+    app.run('localhost', port=5001, debug=app.config['DEBUG'])
