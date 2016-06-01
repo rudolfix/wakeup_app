@@ -18,6 +18,7 @@ for example:
 You can obtain refresh and access tokens in your session object (see SDK). Please note that refresh_token is an server encrypted value
 
 Few additional remarks:
+
 1. User needs **premium account** to use this sleep app. Free account will not give you access to play lists and streaming
 2. See later on configuring Spotify App, without it you will not login
 3. Refresh spotify sessions as described in SDK
@@ -55,7 +56,7 @@ For new users we use default desired length of **30 minutes**
 
 Example
 ```javascript
-curl -X GET "http://wakeupapp.dev.army/me/playlists" -H "Authorization: ...."
+curl -X GET "http://sleepapi.dev.army/me/playlists" -H "Authorization: ...."
 {
   "result": [
     {
@@ -78,6 +79,7 @@ Special HTTP status codes:
 
 ####/me/playlists/:playlist_type
 Input parameters
+
 **:playlist_type** tells which plalist to set up ( **wake_up** | **fall_asleep**). Mandatory parameter
 Query string parameters
 **desired_length** - desired playlist length in milliseconds. Please note that actual playlist length will be different 
@@ -86,7 +88,7 @@ Returns
 *Playlist* object
 
 ```javascript
-curl -X POST "http://wakeupapp.dev.army/me/playlists/wake_up?desired_length=30000" -H "Authorization: ...."
+curl -X POST "http://sleepapi.dev.army/me/playlists/wake_up?desired_length=30000" -H "Authorization: ...."
 {
   "result": {
     "length": 415379,
@@ -97,6 +99,7 @@ curl -X POST "http://wakeupapp.dev.army/me/playlists/wake_up?desired_length=3000
 ```
 
 Special HTTP error codes:
+
 1. 428: user data is not processed and playlist cannot be generated. it typically take from 15 to 2 minutes. currently (demo) this is a random time
 
 Example Api Session
@@ -151,6 +154,7 @@ Spotify App Configuration
 *Wakeup Playlist Generator* spotify app with client id 3547ee3842f24500aded0f5a0afe11a5 is used both for dev and prod
 environments (todo: create separate app for prod env.)
 This app must be configured properly to allow mobile clients to login
+
 1. Register iOS/Android bundle (like sleep.luxury8.com) (https://developer.spotify.com/technologies/spotify-ios-sdk/)
 2. Set up a auth callback with app url scheme (https://developer.spotify.com/technologies/spotify-ios-sdk/tutorial/)
 3. Exactly the same callback must be set on the backend (/sleep_server/api/config.py:CLIENT_CALLBACK_URL. Spotify checks
@@ -159,16 +163,18 @@ if both match.
 
 Deployment Information
 -----------------------
-* API and Swap Service are deployed on http://wakeupapp.dev.army. (AWS/Frankfurt/Micro)
-* There is admin/test service accessible on http://wakeupapp.dev.army/admin/dashboard. After login you'll see your
+* API and Swap Service are deployed on http://sleepapi.dev.army. (AWS/Frankfurt/Micro)
+* There is admin/test service accessible on http://sleepapi.dev.army/admin/dashboard. After login you'll see your
 Authorization header you may use to test with curl
 
 
 Notes On Mockup
 ------------------------
 Mockup works like final service, except playlists are not smartly generated. Currently there are two template playlists
+
 1. https://open.spotify.com/user/1130122659/playlist/1v1Do2ukgKZ64wCuOrBnug (wake up)
 2. https://open.spotify.com/user/1130122659/playlist/4rk4vb5hjM2jC5HFaOKRAL (fall asleep)
+
 (Sarnecka is the owner) Playlist content is copied and then truncated to desired length. Finally it is stored in current
 user Spotify account and available for playback
 *I've found out that some songs available in DE for Aga are not available in PL for me, possible huge fuckup with
