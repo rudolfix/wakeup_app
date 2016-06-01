@@ -1,0 +1,36 @@
+#resources for api container
+#WAKEUPP_APP_CONFIG_FILE (env) - path to prod config file
+#/var/log/sleep_server (path)
+
+quickly remove unused images and containers
+https://www.invisiblelines.com/blog/2014/11/13/cleaning-up-docker-containers-and-images/
+
+
+#this will be a proper docker file later
+#instance DNS 52.28.90.131 wakeupapp.dev.army
+#ssh -i sleep_server.pem ubuntu@wakeupapp.dev.army
+#install uwsgi
+#set UWSGI_PROFILE_OVERRIDE=ssl=true;routing=true;pcre=true
+#pip3 install uwsgi
+#letsencrypt used for ssl cert https://letsencrypt.readthedocs.org/en/latest/using.html#installation
+
+#create dirs
+##mkdir /home/ubuntu/wakeupapp
+##chmod 777 /home/ubuntu/wakeupapp
+##mkdir /home/ubuntu/wakeupapp/user_storage
+##chmod 777 /home/ubuntu/wakeupapp/user_storage
+#copy files
+##scp -i sleep_server.pem ../src/run_uwsgi_prod.sh ubuntu@wakeupapp.dev.army:/home/ubuntu/wakeupapp
+##scp -r -i sleep_server.pem ../src/sleep_server/* ubuntu@wakeupapp.dev.army:/home/ubuntu/wakeupapp/sleep_server/
+##scp -i sleep_server.pem ../src/requirements.txt ubuntu@wakeupapp.dev.army:/home/ubuntu/wakeupapp
+#execute vagrant provision file
+
+10. bind to single interface on multihome machine
+docker-compose:yml
+ports:
+      - "172.31.18.128:80:80"
+11. start docker on remote linux (systemd ;>)
+sudo service docker start
+
+12. AWS prepare volumes sudo dd if=/dev/xvda of=/dev/null bs=1M conv=fdatasync
+
