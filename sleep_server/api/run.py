@@ -7,4 +7,5 @@ os.sys.path.insert(0,parentdir)
 from api import app
 
 if __name__ == '__main__':
-    app.run(app.config['HOST_NAME'], debug=app.config['DEBUG'])
+    # print('binding to %s' % app.config['HOST_NAME'])
+    app.run('dev.wakeupapp.com', debug=app.config['DEBUG'])
