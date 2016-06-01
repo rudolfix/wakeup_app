@@ -14,6 +14,7 @@ manager = Manager(app)
 
 manager.add_command('db', MigrateCommand)
 manager.add_command('cache', cache.CacheCommand)
+# todo: add all music graph utils as a set of commands here
 
 
 if __name__ == '__main__':
