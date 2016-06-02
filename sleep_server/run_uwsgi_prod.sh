@@ -1,1 +1,1 @@
-uwsgi --http :80 --wsgi-file /usr/local/sleep_server/api/run.py --callable app --pythonpath /usr/local/sleep_server/api/
+uwsgi --http :80 --wsgi-file /usr/local/sleep_server/api/run.py --callable app --pythonpath /usr/local/sleep_server/api/ --logto /var/log/sleep_server/api.uwsgi.log
