@@ -25,7 +25,7 @@ _f_duration_id_i = 12
 
 _is_sleep_genre_threshold = 0.47  # genres with that rate of sleepy songs are considered sleepy (sleepy cluster poss.)
 _is_wakeup_genre_threshold = 0.65 # genres with that many wakeful songs may be used as wakeup
-_blocked_sleep_genres = ['modern performance', 'classical christmas']
+_blocked_sleep_genres = ['modern performance', 'classical christmas', 'christmas', 'indie christmas']
 _blocked_wakeup_genres = []
 
 _significant_genres = 4  # number of top genres for artist that will be used in user pref computations
@@ -331,7 +331,7 @@ def trim_song_slice_length_by_acoustics(track_mappings, song_features, desired_l
         rem_idx = min(range(len(mapped_song_adiffs)), key=mapped_song_adiffs.__getitem__) + 1
         rem_len = mapped_song_features[rem_idx][_f_duration_id_i]
         if c_len - rem_len < desired_length:
-            break;  # stay above desired_length
+            break  # stay above desired_length
         c_len -= rem_len
         # del removed song
         del mapped_song_features[rem_idx]
