@@ -23,8 +23,9 @@ Few additional remarks:
 2. See later on configuring Spotify App, without it you will not login
 3. Refresh spotify sessions as described in SDK
 4. Please provide correct spotify scope during login, please find current scope in /sleep_server/api/config.py
->playlist-read-private playlist-read-collaborative playlist-modify-private user-follow-read user-library-read user-read-private user-top-read
 
+
+>playlist-read-private playlist-read-collaborative playlist-modify-private user-follow-read user-library-read user-read-private user-top-read
 
 
 Api Methods

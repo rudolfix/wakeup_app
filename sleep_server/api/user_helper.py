@@ -114,6 +114,7 @@ def create_user_playlist(user, playlist_type, desired_length, playlist_id=None):
 
 def gather_music_data(user):
     can_be_updated = True
+    # todo: update when not resolved or when library was not updated in X days, currently we always update
     try:
         can_be_updated = mgc.get_library(user)['can_be_updated']
     except LibraryNotExistsException:

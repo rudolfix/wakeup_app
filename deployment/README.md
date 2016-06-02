@@ -22,6 +22,7 @@ docker-compose --verbose build
 ##Local deployment
 You may deploy on your local docker host to test the deployment. There is a callback defined in spotify app for that purpose
 http://dev.docker.wakeupapp.com/admin/login_completed
+
 host file:
 127.0.0.1 dev.wakeupapp.com wakeupapp.com
 192.168.99.100 dev.docker.wakeupapp.com
@@ -33,7 +34,7 @@ host file:
 ```javascript
 (aws) docker-machine create --driver generic --generic-ip-address=wakeupapp.dev.army --generic-ssh-key=sleep_server.pem --generic-ssh-user=ubuntu awssleepo
 (droplet)docker-machine create --driver generic --generic-ip-address=sleepapi.dev.army --generic-ssh-key=droplet_sleep.rsa --generic-ssh-user=root sleepdroplet
-```javascript
+```
 
 Minimum machine specs: 1GB ram, 10 GB SSD with reasonable speed (AWS t2 crap does not work, credits immediately expire)
 
