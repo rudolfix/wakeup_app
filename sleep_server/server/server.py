@@ -13,7 +13,7 @@ parentdir = os.path.dirname(currentdir)
 os.sys.path.insert(0, parentdir)
 from common.user_base import UserBase
 from common import spotify_helper
-from server import app, song_helper, echonest_helper, user_library, music_graph_helper as mgh, cache, mq
+from server import app, db, song_helper, echonest_helper, user_library, music_graph_helper as mgh, cache, mq
 from common.exceptions import ApiException, LibraryNotExistsException, LibraryNotResolvedException
 from common.common import possible_list_types
 
@@ -151,12 +151,19 @@ def handle_error(e):
     return json.jsonify(_make_error_dict(e, 500)), 500
 
 
+@app.teardown_request
+def teardown_request(exception):
+    if exception:
+        db.session.rollback()
+    db.session.remove()
+
+
 def _make_error_dict(e, status_code):
     return {'error': {'status': status_code, 'code': e.__class__.__name__, 'message': str(e)}}
 
 
 def init_logging():
-    handler = RotatingFileHandler(app.config['LOG_FILE'], maxBytes=100000, backupCount=50)
+    handler = RotatingFileHandler(app.config['LOG_FILE'], maxBytes=5000000, backupCount=10)
     formatter = logging.Formatter('%(asctime)s | %(filename)s:%(lineno)d | %(funcName)s | %(levelname)s | %(message)s ')
     handler.setFormatter(formatter)
     handler.setLevel(app.config['LOG_LEVEL'])

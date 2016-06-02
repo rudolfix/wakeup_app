@@ -7,7 +7,7 @@ import pika
 from functools import wraps
 
 from common.user_base import UserBase
-from server import app, fpika, song_helper, user_library, music_graph_helper
+from server import app, db, fpika, song_helper, user_library, music_graph_helper
 from server.exceptions import MqMalformedMessageException
 
 _ch_user_lib_updater = 'user_lib_updater'
@@ -30,8 +30,12 @@ def mq_callback(f):
             ch.basic_ack(delivery_tag=method.delivery_tag)
         except Exception as exc:
             app.logger.exception(exc)
-            # traceback.print_exc(file=sys.stdout)
+            db.session.rollback()
+            # todo: use dead-letter queue for proper retry timeout
+            time.sleep(5)  # do not retry immediately
             ch.basic_nack(delivery_tag=method.delivery_tag)
+        # remove database session after each message
+        db.session.remove()
 
     return _wrap
 
@@ -52,6 +56,7 @@ def _user_lib_resolver_callback(ch, method, properties, body):
     app.logger.debug('RESOLVER CONSUMER received')
     start_time = time.time()
     user_id, user = _parse_user_library_mq_msg(body)
+    app.logger.debug('RESOLVER CONSUMER processing %s' % user_id)
     library = user_library.load_library(user_id)
     if library.unresolved_tracks:
         _, _, _, new_artists = user_library.resolve_user_library(library, music_graph_helper.G.genres_names)
@@ -67,6 +72,7 @@ def _user_lib_updater_callback(ch, method, properties, body):
     app.logger.debug('UPDATER CONSUMER received')
     start_time = time.time()
     user_id, user = _parse_user_library_mq_msg(body)
+    app.logger.debug('UPDATER CONSUMER processing %s' % user_id)
     library = user_library.load_library(user_id)
     # quickly mark as processing
     library.unresolved_tracks = []
