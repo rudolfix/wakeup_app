@@ -38,13 +38,13 @@ def get_playlists(user):
 @app.route('/me/playlists/<playlist_type>', methods=['POST'])
 @check_user
 def set_playlist(user, playlist_type):
-    # read playlist length from get params
-    if request.values.get('desired_length') is None:
-        raise PlaylistIncorrectDesiredLength(-1, int(app.config['MAXIMUM_PLAYLIST_LENGTH']))
-    desired_length = int(request.values.get('desired_length'))
-    # check max and min playlist length. may be 0
     min_length = int(app.config['MINIMUM_PLAYLIST_LENGTH'])
     max_length = int(app.config['MAXIMUM_PLAYLIST_LENGTH'])
+    # read playlist length from get params
+    if request.values.get('desired_length') is None:
+        raise PlaylistIncorrectDesiredLength(-1, min_length, max_length)
+    desired_length = int(request.values.get('desired_length'))
+    # check max and min playlist length. may be 0
     if desired_length < min_length or desired_length > max_length:
         raise PlaylistIncorrectDesiredLength(desired_length, min_length, max_length)
 

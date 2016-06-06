@@ -62,7 +62,7 @@ def setup_module(module):
             api.app.config.from_envvar('WAKEUPP_APP_CONFIG_FILE')
         api.app.config['USER_STORAGE_URI'] += '../test_user_storage/'
         user_helper.init_user_storage()
-        api.app.config['SERVER_NAME'] = api.app.config['HOST_NAME']
+        api.app.config['SERVER_NAME'] = 'dev.wakeupapp.com'
         api.app.config['DEBUG'] = True
         api.app.config['TESTING'] = True
         # delete library of the test user
@@ -121,6 +121,9 @@ def test_create_playlist(client):
     assert rv.status_code == 200
     _check_ok_response_body(rv.data)
     rv = client.post('/me/playlists/wake_up?desired_length=' + str(8000*60*1000), headers=headers)
+    assert rv.status_code == 400
+    _check_error_response_body(rv.data)
+    rv = client.post('/me/playlists/wake_up', headers=headers)
     assert rv.status_code == 400
     _check_error_response_body(rv.data)
     rv = client.get('/me/playlists', headers = headers)
