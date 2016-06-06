@@ -4,6 +4,7 @@ from flask import json
 import pika
 from functools import wraps
 from spotipy import SpotifyException
+from pyen import PyenException
 
 from common.user_base import UserBase
 from common.exceptions import SpotifyApiInvalidToken
@@ -42,21 +43,30 @@ def mq_callback(f):
             error_ack()
         except SpotifyException as spotex:
             # spotify may cause a terminal error
+            app.logger.exception(spotex)
             if spotex.http_status == 401 or spotex.http_status == 403:
                 app.logger.error('terminal spotify error, MESSAGE DISCARDED (%s)' % str(spotex))
-                app.logger.exception(spotex)
                 error_ack()
             else:
                 error_nack()
         except SpotifyApiInvalidToken as spottokenex:
             # invalid token is a terminal error
             # todo: write some status to library after terminal error
-            app.logger.error('terminal spotify token error, MESSAGE DISCARDED (%s)' % str(spottokenex))
             app.logger.exception(spottokenex)
+            app.logger.error('terminal spotify token error, MESSAGE DISCARDED (%s)' % str(spottokenex))
             error_ack()
+        except PyenException as pyenex:
+            # 403 is terminal error
+            app.logger.exception(pyenex)
+            if pyenex.http_status == 403:
+                app.logger.error('terminal spotify token error, MESSAGE DISCARDED (%s)' % str(pyenex))
+                app.logger.exception(pyenex)
+                error_ack()
+            else:
+                error_nack()
         except Exception as exc:
             app.logger.exception(exc)
-
+            error_nack()
         # remove database session after each message
         db.session.remove()
 
