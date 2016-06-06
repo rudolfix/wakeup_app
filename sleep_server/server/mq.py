@@ -1,12 +1,12 @@
-import sys
-import traceback
 import time
 from threading import Thread, Lock
 from flask import json
 import pika
 from functools import wraps
+from spotipy import SpotifyException
 
 from common.user_base import UserBase
+from common.exceptions import SpotifyApiInvalidToken
 from server import app, db, fpika, song_helper, user_library, music_graph_helper
 from server.exceptions import MqMalformedMessageException
 
@@ -21,19 +21,42 @@ def mq_callback(f):
     def _wrap(*args, **kwargs):
         ch = args[0]
         method = args[1]
+
+        def error_nack():
+            db.session.rollback()
+            # todo: use dead-letter queue for proper retry timeout
+            time.sleep(5)  # do not retry immediately
+            ch.basic_nack(delivery_tag=method.delivery_tag)
+
+        def error_ack():
+            db.session.rollback()
+            time.sleep(5)  # do not retry immediately
+            ch.basic_ack(delivery_tag=method.delivery_tag)
+
         try:
             r = f(*args, **kwargs)
             ch.basic_ack(delivery_tag=method.delivery_tag)
             return r
         except MqMalformedMessageException as mf:
             app.logger.error('queue message malformed, MESSAGE DISCARDED (%s)' % str(mf))
-            ch.basic_ack(delivery_tag=method.delivery_tag)
+            error_ack()
+        except SpotifyException as spotex:
+            # spotify may cause a terminal error
+            if spotex.http_status == 401 or spotex.http_status == 403:
+                app.logger.error('terminal spotify error, MESSAGE DISCARDED (%s)' % str(spotex))
+                app.logger.exception(spotex)
+                error_ack()
+            else:
+                error_nack()
+        except SpotifyApiInvalidToken as spottokenex:
+            # invalid token is a terminal error
+            # todo: write some status to library after terminal error
+            app.logger.error('terminal spotify token error, MESSAGE DISCARDED (%s)' % str(spottokenex))
+            app.logger.exception(spottokenex)
+            error_ack()
         except Exception as exc:
             app.logger.exception(exc)
-            db.session.rollback()
-            # todo: use dead-letter queue for proper retry timeout
-            time.sleep(5)  # do not retry immediately
-            ch.basic_nack(delivery_tag=method.delivery_tag)
+
         # remove database session after each message
         db.session.remove()
 
@@ -73,6 +96,7 @@ def _user_lib_updater_callback(ch, method, properties, body):
     start_time = time.time()
     user_id, user = _parse_user_library_mq_msg(body)
     app.logger.debug('UPDATER CONSUMER processing %s' % user_id)
+    # raise SpotifyException(403, 'Forbidden', 'Test MQ terminal error')
     library = user_library.load_library(user_id)
     # quickly mark as processing
     library.unresolved_tracks = []
